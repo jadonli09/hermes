@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-01-19T03:17:33.275Z",
+  "dateRange": {
+    "start": "2026-01-01",
+    "end": "2026-04-01"
+  },
+  "totalClubs": 80,
+  "clubsProcessed": 80,
+  "clubsFailed": 0,
+  "postsScraped": 29,
+  "newPostsAdded": 29,
+  "duplicatesSkipped": 0,
+  "apiCallsMade": 29,
+  "failedClubs": []
+}
