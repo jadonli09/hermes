@@ -125,6 +125,123 @@ export function parseInstagramDate(dateString) {
 }
 
 /**
+ * Detects rate limiting from HTTP response
+ * Checks HTTP status codes, Retry-After header, and X-RateLimit headers
+ * @param {Object} response - Playwright response object or error with response
+ * @returns {Object} - Object with isRateLimited, retryAfterMs, remaining, limit
+ */
+export function detectRateLimiting(response) {
+  const result = {
+    isRateLimited: false,
+    retryAfterMs: null,
+    remaining: null,
+    limit: null,
+    reason: null
+  };
+
+  if (!response) {
+    return result;
+  }
+
+  // Check HTTP status code
+  const status = response.status?.() || response.status || response.statusCode;
+  if (status === 429) {
+    result.isRateLimited = true;
+    result.reason = 'HTTP 429 Too Many Requests';
+  }
+
+  // Check for headers (Playwright response or fetch response)
+  const headers = response.headers?.() || response.headers || {};
+
+  // Normalize header access (case-insensitive)
+  const getHeader = (name) => {
+    const lowerName = name.toLowerCase();
+    for (const key in headers) {
+      if (key.toLowerCase() === lowerName) {
+        return headers[key];
+      }
+    }
+    return null;
+  };
+
+  // Parse Retry-After header
+  const retryAfter = getHeader('retry-after');
+  if (retryAfter) {
+    const parsed = parseInt(retryAfter, 10);
+    if (!isNaN(parsed)) {
+      // Value in seconds, convert to milliseconds
+      result.retryAfterMs = parsed * 1000;
+    } else {
+      // Try parsing as HTTP date
+      const date = new Date(retryAfter);
+      if (!isNaN(date.getTime())) {
+        const now = Date.now();
+        const delay = date.getTime() - now;
+        if (delay > 0) {
+          result.retryAfterMs = delay;
+        }
+      }
+    }
+  }
+
+  // Parse X-RateLimit headers
+  const remaining = getHeader('x-ratelimit-remaining');
+  if (remaining !== null) {
+    result.remaining = parseInt(remaining, 10);
+    if (result.remaining === 0) {
+      result.isRateLimited = true;
+      result.reason = result.reason || 'X-RateLimit-Remaining is 0';
+    }
+  }
+
+  const limit = getHeader('x-ratelimit-limit');
+  if (limit !== null) {
+    result.limit = parseInt(limit, 10);
+  }
+
+  // Parse X-RateLimit-Reset (Unix timestamp)
+  const reset = getHeader('x-ratelimit-reset');
+  if (reset !== null && !result.retryAfterMs) {
+    const resetTime = parseInt(reset, 10) * 1000; // Convert to ms
+    const now = Date.now();
+    if (resetTime > now) {
+      result.retryAfterMs = resetTime - now;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Sets up a response listener to detect rate limiting on a page
+ * @param {Page} page - Playwright page object
+ * @param {Function} onRateLimit - Callback when rate limit detected
+ * @returns {Function} - Function to remove the listener
+ */
+export function setupRateLimitListener(page, onRateLimit) {
+  const listener = (response) => {
+    const rateLimitInfo = detectRateLimiting(response);
+    if (rateLimitInfo.isRateLimited) {
+      console.warn(`⚠️  Rate limit detected: ${rateLimitInfo.reason}`);
+      if (rateLimitInfo.retryAfterMs) {
+        console.warn(`   Retry-After: ${Math.round(rateLimitInfo.retryAfterMs / 1000)}s`);
+      }
+      if (rateLimitInfo.remaining !== null) {
+        console.warn(`   Remaining: ${rateLimitInfo.remaining}/${rateLimitInfo.limit}`);
+      }
+      if (onRateLimit) {
+        onRateLimit(rateLimitInfo);
+      }
+    }
+  };
+
+  page.on('response', listener);
+
+  // Return function to remove listener
+  return () => page.off('response', listener);
+}
+
+/**
  * Detects if Instagram is blocking or challenging the scraper
  * @param {Page} page - Playwright page object
  * @returns {Promise<Object>} - Object with blocked (boolean), reason (string), canRetry (boolean)
@@ -415,7 +532,7 @@ export async function loginToInstagram(page, username, password) {
  * @param {Object} postData - Post object with caption
  * @returns {boolean} - True if post appears to be intro/pinned
  */
-function isIntroPost(postData) {
+export function isIntroPost(postData) {
   if (!postData || !postData.caption) {
     return false;
   }

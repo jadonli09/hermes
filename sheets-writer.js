@@ -1,4 +1,4 @@
-// Google Sheets writer module for populating spreadsheet with meeting data
+// Google Sheets writer module for populating spreadsheet with event data
 import { google } from 'googleapis';
 import { retryWithBackoff } from './utils/retry.js';
 
@@ -112,11 +112,11 @@ export async function getExistingEvents(sheets, spreadsheetId) {
     let duplicateCount = 0;
 
     try {
-      // Read all existing data from columns A-K (11 columns)
+      // Read all existing data from columns A-J (10 columns)
       const existingDataResponse = await retryWithBackoff(async () => {
         return await sheets.spreadsheets.values.get({
           spreadsheetId: spreadsheetId,
-          range: `${sheetName}!A:K` // All columns A through K
+          range: `${sheetName}!A:J` // All columns A through J
         });
       });
 
@@ -129,19 +129,18 @@ export async function getExistingEvents(sheets, spreadsheetId) {
             const postUrl = (row[5] || '').trim(); // Column F (index 5) is post_url
             if (postUrl) {
               // Parse row data into event object
-              // Columns: A=club_name, B=meeting_date, C=meeting_time, D=meeting_type, E=location, F=post_url, G=posted_date, H=confidence, I=description, J=last_updated, K=recurrence
+              // Columns: A=club_name, B=event_date, C=event_time, D=event_type, E=location, F=post_url, G=posted_date, H=confidence, I=description, J=last_updated
               const eventData = {
                 club_name: (row[0] || '').trim(),
-                meeting_date: (row[1] || '').trim(),
-                meeting_time: (row[2] || '').trim(),
-                meeting_type: (row[3] || '').trim(),
+                event_date: (row[1] || '').trim(),
+                event_time: (row[2] || '').trim(),
+                event_type: (row[3] || '').trim(),
                 location: (row[4] || '').trim(),
                 post_url: postUrl,
                 posted_date: (row[6] || '').trim(),
                 confidence: (row[7] || '').trim(),
                 description: (row[8] || '').trim(),
-                last_updated: (row[9] || '').trim(),
-                recurrence: (row[10] || '').trim()
+                last_updated: (row[9] || '').trim()
               };
               // Row index is 1-indexed for Sheets API (i+1 because we skipped header)
               const rowInfo = { rowIndex: i + 1, data: eventData };
@@ -177,6 +176,42 @@ export async function getExistingEvents(sheets, spreadsheetId) {
 }
 
 /**
+ * Normalizes date strings to YYYY-MM-DD format for consistent comparison
+ * @param {string} dateStr - Date string in various formats
+ * @returns {string} - Normalized date string in YYYY-MM-DD format, or empty string if invalid
+ */
+export function normalizeDate(dateStr) {
+  if (!dateStr) return '';
+  const trimmed = String(dateStr).trim();
+
+  // If already in YYYY-MM-DD format, return as-is
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+
+  // If in MM/DD/YYYY or M/D/YYYY format, convert to YYYY-MM-DD
+  const mmddyyyy = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (mmddyyyy) {
+    const [, month, day, year] = mmddyyyy;
+    return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+
+  // Try parsing as Date object and converting to YYYY-MM-DD
+  try {
+    const dateObj = new Date(trimmed);
+    if (!isNaN(dateObj.getTime())) {
+      const year = dateObj.getFullYear();
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const day = String(dateObj.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+  } catch (e) {
+    // If date parsing fails, continue with original string
+  }
+
+  // Return trimmed string as fallback
+  return trimmed;
+}
+
+/**
  * Compares two event objects to determine if data has changed
  * @param {Object} existing - Existing event data from spreadsheet
  * @param {Object} newEvent - New event data to compare
@@ -192,51 +227,19 @@ export function compareEventData(existing, newEvent) {
   // Compare all relevant fields (excluding last_updated which will always change)
   const fieldsToCompare = [
     'club_name',
-    'meeting_date',
-    'meeting_time',
-    'meeting_type',
+    'event_date',
+    'event_time',
+    'event_type',
     'location',
-    'description',
-    'recurrence'
+    'description'
   ];
 
   for (const field of fieldsToCompare) {
     const existingValue = normalize(existing[field] || '');
     const newValue = normalize(newEvent[field] || '');
-    
-    // Special handling for meeting_date - normalize date formats
-    if (field === 'meeting_date') {
-      // Convert various date formats to YYYY-MM-DD for comparison
-      const normalizeDate = (dateStr) => {
-        if (!dateStr) return '';
-        const trimmed = String(dateStr).trim();
-        
-        // If already in YYYY-MM-DD format, return as-is
-        if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
-        
-        // If in MM/DD/YYYY or M/D/YYYY format, convert to YYYY-MM-DD
-        const mmddyyyy = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-        if (mmddyyyy) {
-          const [, month, day, year] = mmddyyyy;
-          return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-        }
-        
-        // Try parsing as Date object and converting to YYYY-MM-DD
-        try {
-          const dateObj = new Date(trimmed);
-          if (!isNaN(dateObj.getTime())) {
-            const year = dateObj.getFullYear();
-            const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-            const day = String(dateObj.getDate()).padStart(2, '0');
-            return `${year}-${month}-${day}`;
-          }
-        } catch (e) {
-          // If date parsing fails, continue with original string
-        }
-        
-        // Return trimmed string as fallback
-        return trimmed;
-      };
+
+    // Special handling for event_date - normalize date formats
+    if (field === 'event_date') {
       if (normalizeDate(existingValue) !== normalizeDate(newValue)) {
         return true; // Data has changed
       }
@@ -248,9 +251,9 @@ export function compareEventData(existing, newEvent) {
   }
 
   // Also compare confidence if both are numeric
-  const existingConfidence = existing.confidence !== null && existing.confidence !== undefined 
+  const existingConfidence = existing.confidence !== null && existing.confidence !== undefined
     ? String(existing.confidence).trim() : '';
-  const newConfidence = newEvent.confidence !== null && newEvent.confidence !== undefined 
+  const newConfidence = newEvent.confidence !== null && newEvent.confidence !== undefined
     ? String(newEvent.confidence).trim() : '';
   if (existingConfidence !== newConfidence) {
     return true; // Confidence changed
@@ -407,27 +410,31 @@ export async function updateOrAppendToSheet(sheets, spreadsheetId, data, existin
           continue;
         }
         
-        // Convert meeting to row format with 11 columns (A-K)
+        // Convert event to row format with 10 columns (A-J)
+        // If needs_review flag is set, prepend marker to description
+        const description = meeting.needs_review
+          ? `[NEEDS REVIEW] ${meeting.description || ''}`
+          : (meeting.description || '');
+
         const row = [
           meeting.club_name || '',
-          formatDateForSheets(meeting.meeting_date),
-          meeting.meeting_time || '',
-          meeting.meeting_type || '',
+          formatDateForSheets(meeting.event_date),
+          meeting.event_time || '',
+          meeting.event_type || '',
           meeting.location || '',
           meeting.post_url || '',
           formatDateForSheets(meeting.posted_date),
           meeting.confidence !== null && meeting.confidence !== undefined ? meeting.confidence : '',
-          meeting.description || '',
-          formatTimestamp(), // Last Updated (column J)
-          meeting.recurrence || '' // Recurrence (column K)
+          description,
+          formatTimestamp() // Last Updated (column J)
         ];
-        
+
         // Update the row using values.update (simpler and more reliable)
         try {
           await retryWithBackoff(async () => {
             return await sheets.spreadsheets.values.update({
               spreadsheetId: spreadsheetId,
-              range: `${sheetName}!A${rowIndex}:K${rowIndex}`,
+              range: `${sheetName}!A${rowIndex}:J${rowIndex}`,
               valueInputOption: 'USER_ENTERED',
               resource: {
                 values: [row]
@@ -450,7 +457,7 @@ export async function updateOrAppendToSheet(sheets, spreadsheetId, data, existin
           const formatRequests = successfullyUpdatedRows.map((rowIndex) => {
             const rowIdx = rowIndex - 1; // Convert to 0-indexed
             return [
-              // Format Meeting Date column (B) as date
+              // Format Event Date column (B) as date
               {
                 repeatCell: {
                   range: {
@@ -535,29 +542,33 @@ export async function updateOrAppendToSheet(sheets, spreadsheetId, data, existin
     if (eventsToAppend.length > 0) {
       console.log(`Appending ${eventsToAppend.length} new row(s)...`);
       
-      // Convert meeting objects to row format with 11 columns (A-K)
+      // Convert event objects to row format with 10 columns (A-J)
       const rows = eventsToAppend.map(meeting => {
-      return [
-        meeting.club_name || '',
-        formatDateForSheets(meeting.meeting_date),
-        meeting.meeting_time || '',
-        meeting.meeting_type || '',
-        meeting.location || '',
-        meeting.post_url || '',
-        formatDateForSheets(meeting.posted_date),
-        meeting.confidence !== null && meeting.confidence !== undefined ? meeting.confidence : '',
-          meeting.description || '',
-          formatTimestamp(), // Last Updated (column J)
-          meeting.recurrence || '' // Recurrence (column K)
-      ];
-    });
-    
-    // Append rows to the spreadsheet with retry logic
-      // Range: 'Sheet1!A:K' (or first sheet, columns A through K)
-    const response = await retryWithBackoff(async () => {
-      return await sheets.spreadsheets.values.append({
-        spreadsheetId: spreadsheetId,
-          range: `${sheetName}!A:K`,
+        // If needs_review flag is set, prepend marker to description
+        const description = meeting.needs_review
+          ? `[NEEDS REVIEW] ${meeting.description || ''}`
+          : (meeting.description || '');
+
+        return [
+          meeting.club_name || '',
+          formatDateForSheets(meeting.event_date),
+          meeting.event_time || '',
+          meeting.event_type || '',
+          meeting.location || '',
+          meeting.post_url || '',
+          formatDateForSheets(meeting.posted_date),
+          meeting.confidence !== null && meeting.confidence !== undefined ? meeting.confidence : '',
+          description,
+          formatTimestamp() // Last Updated (column J)
+        ];
+      });
+
+      // Append rows to the spreadsheet with retry logic
+      // Range: 'Sheet1!A:J' (or first sheet, columns A through J)
+      const response = await retryWithBackoff(async () => {
+        return await sheets.spreadsheets.values.append({
+          spreadsheetId: spreadsheetId,
+          range: `${sheetName}!A:J`,
         valueInputOption: 'USER_ENTERED', // Allows formulas, dates, etc. to be interpreted
         insertDataOption: 'INSERT_ROWS', // Insert new rows instead of overwriting
         resource: {
@@ -589,7 +600,7 @@ export async function updateOrAppendToSheet(sheets, spreadsheetId, data, existin
             spreadsheetId: spreadsheetId,
             resource: {
               requests: [
-                // Format Meeting Date column (B) as date
+                // Format Event Date column (B) as date
                 {
                   repeatCell: {
                     range: {
@@ -687,30 +698,30 @@ export async function updateOrAppendToSheet(sheets, spreadsheetId, data, existin
 }
 
 /**
- * Sorts the spreadsheet by meeting_date column (column B) in ascending order
+ * Sorts the spreadsheet by event_date column (column B) in ascending order
  * @param {Object} sheets - Authenticated Google Sheets API client
  * @param {string} spreadsheetId - ID of the Google Spreadsheet
  * @returns {Promise<void>}
  */
 export async function sortSheetByDate(sheets, spreadsheetId) {
   try {
-    console.log('Sorting spreadsheet by meeting_date...');
-    
+    console.log('Sorting spreadsheet by event_date...');
+
     // First, get the sheet ID of the first sheet (Sheet1) with retry logic
     const spreadsheet = await retryWithBackoff(async () => {
       return await sheets.spreadsheets.get({
         spreadsheetId: spreadsheetId
       });
     });
-    
+
     // Check if spreadsheet has sheets
     if (!spreadsheet.data.sheets || spreadsheet.data.sheets.length === 0) {
       throw new Error('Spreadsheet has no sheets');
     }
-    
+
     const sheetId = spreadsheet.data.sheets[0].properties.sheetId;
     const sheetName = spreadsheet.data.sheets[0].properties.title;
-    
+
     // Get the last row with data to determine the sort range with retry logic
     const lastRowResponse = await retryWithBackoff(async () => {
       return await sheets.spreadsheets.values.get({
@@ -718,16 +729,16 @@ export async function sortSheetByDate(sheets, spreadsheetId) {
         range: `${sheetName}!A:A` // Get column A to find last row
       });
     });
-    
+
     const lastRow = lastRowResponse.data.values ? lastRowResponse.data.values.length : 1;
-    
+
     // Don't sort if there's only a header row
     if (lastRow <= 1) {
       console.log('No data rows to sort');
       return;
     }
-    
-    // Use batchUpdate to sort by meeting_date column (column B, index 1) with retry logic
+
+    // Use batchUpdate to sort by event_date column (column B, index 1) with retry logic
     await retryWithBackoff(async () => {
       return await sheets.spreadsheets.batchUpdate({
         spreadsheetId: spreadsheetId,
@@ -740,11 +751,11 @@ export async function sortSheetByDate(sheets, spreadsheetId) {
                   startRowIndex: 1, // Skip header row (0-indexed, so 1 = row 2)
                   endRowIndex: lastRow,
                   startColumnIndex: 0, // Column A
-                  endColumnIndex: 11 // Column K
+                  endColumnIndex: 10 // Column J
                 },
                 sortSpecs: [
                   {
-                    dimensionIndex: 1, // Column B (meeting_date) - 0-indexed, so 1 = column B
+                    dimensionIndex: 1, // Column B (event_date) - 0-indexed, so 1 = column B
                     sortOrder: 'ASCENDING' // Ascending order (chronological)
                   }
                 ]
@@ -754,8 +765,8 @@ export async function sortSheetByDate(sheets, spreadsheetId) {
         }
       });
     });
-    
-    console.log(`Successfully sorted spreadsheet by meeting_date (${lastRow - 1} data rows)`);
+
+    console.log(`Successfully sorted spreadsheet by event_date (${lastRow - 1} data rows)`);
     
   } catch (error) {
     console.error('Error sorting spreadsheet:', error.message);

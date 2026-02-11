@@ -1,11 +1,58 @@
 // Retry utility with exponential backoff for handling transient failures
 
 /**
+ * Extracts Retry-After delay from error response headers
+ * @param {Error} error - The error object that may contain response headers
+ * @returns {number|null} - Delay in milliseconds, or null if not found
+ */
+export function getRetryAfterDelay(error) {
+  // Check for Retry-After header in various locations
+  const headers = error.headers || error.response?.headers || {};
+  const retryAfter = headers['retry-after'] || headers['Retry-After'];
+
+  if (!retryAfter) {
+    return null;
+  }
+
+  // Retry-After can be a number of seconds or an HTTP date
+  const parsed = parseInt(retryAfter, 10);
+  if (!isNaN(parsed)) {
+    // It's a number of seconds
+    return parsed * 1000;
+  }
+
+  // Try parsing as HTTP date
+  const date = new Date(retryAfter);
+  if (!isNaN(date.getTime())) {
+    const now = Date.now();
+    const delay = date.getTime() - now;
+    return delay > 0 ? delay : null;
+  }
+
+  return null;
+}
+
+/**
+ * Extracts rate limit information from error response
+ * @param {Error} error - The error object
+ * @returns {Object} - Rate limit info { remaining, limit, reset }
+ */
+export function getRateLimitInfo(error) {
+  const headers = error.headers || error.response?.headers || {};
+
+  return {
+    remaining: headers['x-ratelimit-remaining'] || headers['X-RateLimit-Remaining'] || null,
+    limit: headers['x-ratelimit-limit'] || headers['X-RateLimit-Limit'] || null,
+    reset: headers['x-ratelimit-reset'] || headers['X-RateLimit-Reset'] || null
+  };
+}
+
+/**
  * Determines if an error should be retried based on error type and status code
  * @param {Error} error - The error to check
  * @returns {boolean} - True if the error should be retried
  */
-function shouldRetry(error) {
+export function shouldRetry(error) {
   // Network errors (connection failures, timeouts)
   if (error.message && (
     error.message.includes('ECONNRESET') ||
@@ -93,16 +140,30 @@ export async function retryWithBackoff(fn, options = {}) {
       }
       
       // Calculate delay with exponential backoff
-      const delay = Math.min(
+      let delay = Math.min(
         initialDelay * Math.pow(backoffMultiplier, attempt),
         maxDelay
       );
-      
+
+      // Check for Retry-After header (typically on 429 responses)
+      const retryAfterDelay = getRetryAfterDelay(error);
+      if (retryAfterDelay !== null) {
+        // Use Retry-After delay, but cap at maxDelay
+        delay = Math.min(retryAfterDelay, maxDelay);
+        console.warn(`Rate limited. Server requested retry after ${retryAfterDelay}ms`);
+      }
+
+      // Log rate limit info if available
+      const rateLimitInfo = getRateLimitInfo(error);
+      if (rateLimitInfo.remaining !== null) {
+        console.warn(`Rate limit info: ${rateLimitInfo.remaining}/${rateLimitInfo.limit} remaining`);
+      }
+
       console.warn(
         `Attempt ${attempt + 1}/${maxRetries + 1} failed: ${error.message}. ` +
         `Retrying in ${delay}ms...`
       );
-      
+
       // Wait before retrying
       await new Promise(resolve => setTimeout(resolve, delay));
     }
