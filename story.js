@@ -1,8 +1,8 @@
 // Daily Instagram story generator.
 //
-//   npm run story                        today
+//   npm run story                        today, into STORY_OUT_DIR
 //   npm run story -- --date=2026-02-10   a specific day
-//   npm run story -- --out=./out         write locally instead of uploading
+//   npm run story -- --out=./out         override the destination
 //
 // Reads the spreadsheet, not a scrape run - see the design spec for why.
 import dotenv from 'dotenv';
@@ -54,6 +54,12 @@ async function main() {
   const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
   const credentialsPath = getCredentialsPath(__dirname);
 
+  // Writing into a Drive for Desktop folder is the practical route to the phone:
+  // a service account cannot own files, so it cannot upload to a personal Drive
+  // at all. Files written here are owned by the signed-in user and sync in
+  // seconds. Explicit --out still wins.
+  const outDir = args.out || process.env.STORY_OUT_DIR || null;
+
   console.log('='.repeat(56));
   console.log(`Story for ${isoDate}`);
   console.log('='.repeat(56));
@@ -61,10 +67,11 @@ async function main() {
   // Check Drive before doing any work, so a permissions problem does not surface
   // only after rendering
   let drive = null;
-  if (!args.out) {
+  if (!outDir) {
     if (!folderId) {
       throw new Error(
-        'GOOGLE_DRIVE_FOLDER_ID must be set in .env, or pass --out=<dir> to write locally'
+        'Set STORY_OUT_DIR in .env (recommended: a Google Drive for Desktop folder),\n' +
+        '  or pass --out=<dir>, or set GOOGLE_DRIVE_FOLDER_ID for API upload.'
       );
     }
     drive = await authenticateDrive(credentialsPath);
@@ -97,10 +104,10 @@ async function main() {
   const images = await renderPages(html);
   console.log(`✓ Rendered ${images.length} image(s)`);
 
-  if (args.out) {
-    fs.mkdirSync(args.out, { recursive: true });
+  if (outDir) {
+    fs.mkdirSync(outDir, { recursive: true });
     for (const [i, buffer] of images.entries()) {
-      const file = path.join(args.out, `story-${isoDate}-p${i + 1}.png`);
+      const file = path.join(outDir, `story-${isoDate}-p${i + 1}.png`);
       fs.writeFileSync(file, buffer);
       console.log(`  ${file}`);
     }
