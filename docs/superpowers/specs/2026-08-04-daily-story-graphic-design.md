@@ -106,6 +106,26 @@ at the same size.
 
 Blank space below a short list is acceptable and expected.
 
+### Density
+
+How much of each event is shown also follows the page's event count. A page with
+one event has most of the card free, so truncating anything there loses
+information for nothing.
+
+| Events on page | Description | Location |
+|---|---|---|
+| ≤2 | 5 lines | Full text, stacked under the description |
+| 3–4 | 3 lines | Truncated to 24 chars, chip beside the text |
+| 5–7 | 2 lines | Truncated to 18 chars, chip beside the text |
+
+On quiet pages the location moves *below* the description rather than beside it.
+The spare space on such a page is vertical, not horizontal — a wide side chip
+would only starve the description column, which is what made the club name and
+long words overflow their box.
+
+The character budget is divided by the page scale, so the chip holds a roughly
+constant pixel width instead of growing with the type.
+
 ### Design tokens
 
 Taken from the MSJ ASB site so the story matches the school's existing identity.

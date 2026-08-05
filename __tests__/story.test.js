@@ -1,7 +1,7 @@
 import { timeRank, sortEvents, paginate, scaleFor, groupByTime, MAX_PER_PAGE } from '../story/paginate.js';
 import { isPublishable, eventsOnDate } from '../story/event-source.js';
 import { monogram } from '../story/avatars.js';
-import { escapeHtml, formatHeading } from '../story/template.js';
+import { escapeHtml, formatHeading, densityFor, buildPage } from '../story/template.js';
 
 const ev = (over = {}) => ({
   club_name: 'msjbio', event_date: '02/10/2026', event_time: 'Lunch',
@@ -192,5 +192,53 @@ describe('formatHeading', () => {
   it('does not slip a day near month boundaries', () => {
     expect(formatHeading('2026-03-01').monthDay).toBe('Mar 1');
     expect(formatHeading('2026-12-31').monthDay).toBe('Dec 31');
+  });
+});
+
+describe('densityFor', () => {
+  it('shows the location in full when the page is nearly empty', () => {
+    expect(densityFor(1).locationMax).toBeNull();
+    expect(densityFor(2).locationMax).toBeNull();
+  });
+
+  it('starts truncating once events compete for space', () => {
+    expect(densityFor(3).locationMax).toBe(24);
+    expect(densityFor(7).locationMax).toBe(18);
+  });
+
+  // The bug this fixes: a single event was clamped to 2 lines with ~900px of
+  // empty card below it, so a truncated description lost information for nothing
+  it('gives more description lines to quieter pages', () => {
+    expect(densityFor(1).descLines).toBeGreaterThan(densityFor(3).descLines);
+    expect(densityFor(3).descLines).toBeGreaterThan(densityFor(5).descLines);
+  });
+
+  it('never drops below two lines, so a description is never a single fragment', () => {
+    for (let n = 1; n <= 12; n++) expect(densityFor(n).descLines).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('buildPage location placement', () => {
+  const evs = (n) => Array.from({ length: n }, (_, i) => ({
+    club_name: `msjclub${i}`, event_time: 'Lunch',
+    location: 'MSJHS Campus - Booth Map Locations',
+    description: 'Something happening', confidence: '0.9'
+  }));
+  const html = (n) => buildPage({
+    isoDate: '2026-02-10', events: evs(n), page: 1, totalPages: 1, totalEvents: n
+  });
+
+  it('stacks the full location under the description on a quiet page', () => {
+    const out = html(1);
+    expect(out).toContain('ev-room below');
+    expect(out).toContain('MSJHS Campus - Booth Map Locations');
+    expect(out).not.toContain('ev-room beside');
+  });
+
+  it('puts a truncated chip beside the text on a busy page', () => {
+    const out = html(5);
+    expect(out).toContain('ev-room beside');
+    expect(out).not.toContain('ev-room below');
+    expect(out).not.toContain('MSJHS Campus - Booth Map Locations');
   });
 });

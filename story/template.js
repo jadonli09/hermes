@@ -35,10 +35,22 @@ export function escapeHtml(value) {
     .replace(/'/g, '&#39;');
 }
 
-// Character budget for the room chip at scale 1.0. Divided by the page scale so
-// the chip stays a roughly constant pixel width - at 1.3x an 18-character chip
-// is wide enough to squeeze the description into a narrow column.
-const LOCATION_MAX = 18;
+/**
+ * How much of each event to show, given how many share the page.
+ *
+ * A quiet day leaves most of the card empty, so truncating anything there is
+ * pure loss - show the whole description and the whole location. Density only
+ * matters once events are competing for the same space.
+ *
+ * @param {number} count - Events on this page
+ * @returns {{descLines: number, locationMax: number|null}} locationMax null
+ *   means show the location in full and let the chip wrap
+ */
+export function densityFor(count) {
+  if (count <= 2) return { descLines: 5, locationMax: null };
+  if (count <= 4) return { descLines: 3, locationMax: 24 };
+  return { descLines: 2, locationMax: 18 };
+}
 
 /**
  * Shortens a location to fit the room chip.
@@ -50,11 +62,17 @@ const LOCATION_MAX = 18;
  *
  * @param {string} location
  * @param {number} [scale] - Page type scale; larger type gets fewer characters
+ * @param {number|null} [locationMax] - Character budget, or null for no limit
  * @returns {string}
  */
-export function shortLocation(location, scale = 1) {
-  const max = Math.round(LOCATION_MAX / scale);
+export function shortLocation(location, scale = 1, locationMax = 18) {
   const text = String(location || '').trim();
+  if (locationMax === null) return text;
+
+  // Divided by scale so the chip holds a roughly constant pixel width - at 1.3x
+  // an 18-character chip is wide enough to squeeze the description into a
+  // narrow column.
+  const max = Math.round(locationMax / scale);
   if (text.length <= max) return text;
   return text.slice(0, max - 1).trimEnd() + '…';
 }
@@ -94,6 +112,8 @@ function avatarMarkup(handle, px) {
  */
 export function buildPage({ isoDate, events, page, totalPages, totalEvents }) {
   const s = scaleFor(events.length);
+  const { descLines, locationMax } = densityFor(events.length);
+  const stackLocation = locationMax === null;
   const px = (v) => `${(v * s).toFixed(1)}px`;
   const { weekday, monthDay } = formatHeading(isoDate);
   const groups = groupByTime(events);
@@ -132,13 +152,21 @@ body{width:${WIDTH}px;height:${HEIGHT}px;overflow:hidden;background:${C.sage600}
 .ev-main{flex:1;min-width:0}
 .ev-club{font-family:'GeneralSans',sans-serif;font-weight:600;font-size:${px(34)};
   color:${C.ink};letter-spacing:-.01em}
-/* Clamp: one verbose caption must not push the rest of the day off the card */
+/* Line budget follows how many events share the card: a quiet day shows the
+   whole description, a busy one clamps so no single caption crowds the rest */
 .ev-desc{font-size:${px(25)};color:${C.inkMuted};margin-top:${px(5)};line-height:1.35;
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-/* Long locations are truncated in shortLocation() so this stays one clean line */
+  overflow-wrap:break-word;
+  display:-webkit-box;-webkit-line-clamp:${descLines};-webkit-box-orient:vertical;overflow:hidden}
+.ev-club{overflow-wrap:break-word}
+/* A busy page puts the room code beside the text as a compact chip. A quiet
+   page has spare height but the same width, so a side chip would only starve
+   the description - stack it underneath instead and show the location in full. */
 .ev-room{font-family:'JBMono',monospace;font-size:${px(25)};font-weight:700;color:${C.bone};
   background:${C.sage600};padding:${px(11)} ${px(18)};border-radius:${px(12)};
-  align-self:center;flex:none;white-space:nowrap}
+  line-height:1.3;text-align:center}
+.ev-room.beside{align-self:center;flex:none;white-space:nowrap}
+.ev-room.below{display:inline-block;margin-top:${px(14)};text-align:left;
+  overflow-wrap:break-word}
 .ft{display:flex;justify-content:space-between;font-family:'JBMono',monospace;
   font-size:${px(21)};letter-spacing:.14em;color:${C.inkMuted};
   border-top:3px solid ${C.ink};padding-top:${px(22)}}
@@ -159,8 +187,9 @@ ${group.events.map(e => `      <div class="ev">
         <div class="ev-main">
           <div class="ev-club">@${escapeHtml(e.club_name)}</div>
           ${e.description ? `<div class="ev-desc">${escapeHtml(e.description)}</div>` : ''}
+          ${e.location && stackLocation ? `<div class="ev-room below">${escapeHtml(e.location)}</div>` : ''}
         </div>
-        ${e.location ? `<div class="ev-room">${escapeHtml(shortLocation(e.location, s))}</div>` : ''}
+        ${e.location && !stackLocation ? `<div class="ev-room beside">${escapeHtml(shortLocation(e.location, s, locationMax))}</div>` : ''}
       </div>`).join('\n')}
     </div>`).join('\n')}
   </div>
