@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import Anthropic from '@anthropic-ai/sdk';
 import { authenticateSheets } from './sheets-writer.js';
+import { getConfiguredModels, modelParams } from './ai-processor.js';
 
 /**
  * Runs a dry-run validation of the configuration
@@ -29,11 +30,20 @@ export async function runDryRun(config, basePath) {
   try {
     validateConfig(config);
     console.log('✓ All required environment variables are set');
-    console.log(`  - Instagram Username: ${maskString(config.instagramUsername)}`);
+    console.log(`  - Scraper Backend: ${config.scraperBackend}`);
+
+    if (config.scraperBackend === 'apify') {
+      console.log(`  - Apify Token: ${maskString(config.apifyToken)}`);
+      console.log(`  - Apify Actor: ${config.apifyActorId}`);
+      console.log(`  - Apify Cost Ceiling: $${config.apifyMaxChargeUsd}/run`);
+    } else {
+      console.log(`  - Instagram Username: ${maskString(config.instagramUsername)}`);
+      console.log(`  - Headless Mode: ${config.headlessMode}`);
+    }
+
     console.log(`  - Anthropic API Key: ${maskString(config.anthropicApiKey)}`);
     console.log(`  - Spreadsheet ID: ${maskString(config.spreadsheetId)}`);
     console.log(`  - Date Range: ${config.startDateStr} to ${config.endDateStr}`);
-    console.log(`  - Headless Mode: ${config.headlessMode}`);
     console.log(`  - Max Clubs: ${config.maxClubsToProcess}`);
     console.log(`  - Parallel Clubs: ${config.parallelClubs}`);
     console.log(`  - Resume Mode: ${config.resumeMode}`);
@@ -84,22 +94,31 @@ export async function runDryRun(config, basePath) {
       apiKey: config.anthropicApiKey
     });
 
-    // Make a minimal API call to test the key
-    const message = await anthropic.messages.create({
-      model: process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514',
-      max_tokens: 10,
-      messages: [
-        {
-          role: 'user',
-          content: 'Reply with only: OK'
-        }
-      ]
-    });
+    // Test every model the run can actually select - a retired ID on the Haiku path
+    // would otherwise only surface mid-run, on whichever posts happen to route there
+    const models = getConfiguredModels();
+    const checks = [];
 
-    if (message.content && message.content.length > 0) {
+    for (const [label, modelId] of Object.entries(models)) {
+      const message = await anthropic.messages.create({
+        model: modelId,
+        max_tokens: 32,
+        ...modelParams(modelId),
+        messages: [
+          {
+            role: 'user',
+            content: 'Reply with only: OK'
+          }
+        ]
+      });
+
+      const text = message.content?.[0]?.text?.trim() || '';
+      console.log(`✓ ${label}: ${modelId} → "${text}"`);
+      checks.push(text.length > 0);
+    }
+
+    if (checks.length > 0 && checks.every(Boolean)) {
       console.log('✓ Claude API connection successful');
-      console.log(`  - Model: ${process.env.CLAUDE_MODEL || 'claude-sonnet-4-20250514'}`);
-      console.log(`  - Response: "${message.content[0].text.trim()}"`);
       results.claudeApiValid = true;
     }
   } catch (error) {
@@ -109,6 +128,9 @@ export async function runDryRun(config, basePath) {
     } else if (error.message.includes('rate limit') || error.message.includes('429')) {
       console.error('  → API key is valid but rate limited');
       results.claudeApiValid = true; // Key is valid, just rate limited
+    } else if (error.message.includes('404') || error.message.includes('not_found')) {
+      console.error('  → Model ID is retired or misspelled. Check CLAUDE_MODEL / HAIKU_MODEL');
+      console.error('  → Current model IDs: https://platform.claude.com/docs/en/about-claude/model-deprecations');
     }
   }
 
@@ -198,13 +220,19 @@ export async function runDryRun(config, basePath) {
  */
 function validateConfig(config) {
   const required = [
-    'instagramUsername',
-    'instagramPassword',
     'anthropicApiKey',
     'spreadsheetId',
     'startDate',
     'endDate'
   ];
+
+  // Backend-specific credentials: the apify backend deliberately has no
+  // Instagram account, so requiring one here would be wrong.
+  if (config.scraperBackend === 'playwright') {
+    required.push('instagramUsername', 'instagramPassword');
+  } else if (config.scraperBackend === 'apify') {
+    required.push('apifyToken');
+  }
 
   for (const field of required) {
     if (!config[field]) {

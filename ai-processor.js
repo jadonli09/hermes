@@ -4,9 +4,29 @@ import { retryWithBackoff } from './utils/retry.js';
 import { validateClaudeResponse, validateMultiDayResponse } from './schemas/claude-response.js';
 
 // Default Claude model - can be overridden via CLAUDE_MODEL env var
-const DEFAULT_CLAUDE_MODEL = 'claude-sonnet-4-20250514';
-// Haiku model for simpler posts (text-heavy, fewer images)
-const HAIKU_MODEL = 'claude-3-5-haiku-20241022';
+const DEFAULT_CLAUDE_MODEL = 'claude-sonnet-5';
+// Haiku model for simpler posts (text-heavy, fewer images) - override via HAIKU_MODEL env var
+const DEFAULT_HAIKU_MODEL = 'claude-haiku-4-5';
+
+// Sonnet 5 runs adaptive thinking by default, and max_tokens caps thinking plus
+// response together. This is fixed-schema JSON extraction, so thinking buys nothing
+// and would eat the output budget - turn it off. Haiku 4.5 has no adaptive thinking
+// and rejects the effort parameter, so it gets no extra params at all.
+// Read env lazily so this does not depend on ai-processor.js being imported
+// after dotenv.config() has run
+export function getConfiguredModels() {
+  return {
+    sonnet: process.env.CLAUDE_MODEL || DEFAULT_CLAUDE_MODEL,
+    haiku: process.env.HAIKU_MODEL || DEFAULT_HAIKU_MODEL
+  };
+}
+
+export function modelParams(claudeModel) {
+  if (claudeModel.startsWith('claude-haiku')) {
+    return {};
+  }
+  return { thinking: { type: 'disabled' } };
+}
 
 // Maximum number of carousel images to process (saves tokens)
 const MAX_CAROUSEL_IMAGES = parseInt(process.env.MAX_CAROUSEL_IMAGES || '3', 10);
@@ -43,31 +63,47 @@ async function fetchImageAsBase64(page, imageUrl) {
   if (!imageUrl) {
     return null;
   }
-  
+
   try {
     return await retryWithBackoff(async () => {
       console.log(`Fetching image from: ${imageUrl.substring(0, 50)}...`);
-      
-      // Use Playwright's request context to fetch image (includes Instagram auth cookies)
-      const response = await page.request.get(imageUrl);
-      
-      if (!response.ok()) {
-        const error = new Error(`Failed to fetch image: ${response.status()}`);
-        error.status = response.status();
-        throw error;
+
+      // With a browser, go through Playwright's request context so Instagram auth
+      // cookies come along. Without one (Apify backend), the CDN URLs are signed
+      // and publicly readable, so a plain fetch works - but they expire, which is
+      // why images are fetched at processing time rather than cached.
+      let buffer;
+      let contentType;
+
+      if (page) {
+        const response = await page.request.get(imageUrl);
+
+        if (!response.ok()) {
+          const error = new Error(`Failed to fetch image: ${response.status()}`);
+          error.status = response.status();
+          throw error;
+        }
+
+        buffer = await response.body();
+        contentType = response.headers()['content-type'] || 'image/jpeg';
+      } else {
+        const response = await fetch(imageUrl);
+
+        if (!response.ok) {
+          const error = new Error(
+            `Failed to fetch image: ${response.status}` +
+            (response.status === 403 ? ' (signed CDN URL may have expired)' : '')
+          );
+          error.status = response.status;
+          throw error;
+        }
+
+        buffer = Buffer.from(await response.arrayBuffer());
+        contentType = response.headers.get('content-type') || 'image/jpeg';
       }
-      
-      // Get image as buffer
-      const buffer = await response.body();
-      
-      // Determine MIME type from response headers or URL
-      const contentType = response.headers()['content-type'] || 'image/jpeg';
-      
-      // Convert buffer to base64
-      const base64Image = buffer.toString('base64');
-      
+
       // Return in data URL format: data:image/jpeg;base64,{base64}
-      return `data:${contentType};base64,${base64Image}`;
+      return `data:${contentType};base64,${buffer.toString('base64')}`;
     }, {
       maxRetries: 2, // Fewer retries for image fetching
       initialDelay: 1000
@@ -263,7 +299,7 @@ Return ONLY valid JSON with these exact keys. No markdown, no explanation, no ad
       console.log(`  Limiting carousel images: using first ${MAX_CAROUSEL_IMAGES} of ${allImageUrls.length} images`);
     }
 
-    if (imageUrls.length > 0 && page) {
+    if (imageUrls.length > 0) {
       const fetchResults = await Promise.all(
         imageUrls.map(async (imageUrl, index) => {
           const imageBase64 = await fetchImageAsBase64(page, imageUrl);
@@ -350,7 +386,8 @@ Quick Reference:
     // Use Haiku for simpler posts (text-heavy, clear patterns) to save tokens
     // Use Sonnet for complex posts (multiple images, needs OCR, short caption)
     const useHaiku = selectModelForPost(post, imagesFetched);
-    const claudeModel = useHaiku ? HAIKU_MODEL : (process.env.CLAUDE_MODEL || DEFAULT_CLAUDE_MODEL);
+    const models = getConfiguredModels();
+    const claudeModel = useHaiku ? models.haiku : models.sonnet;
 
     if (useHaiku) {
       console.log(`  Using Haiku model (simpler post detected)`);
@@ -361,6 +398,7 @@ Quick Reference:
       return await anthropic.messages.create({
         model: claudeModel,
         max_tokens: 1024,
+        ...modelParams(claudeModel),
         messages: [
           {
             role: 'user',
@@ -524,7 +562,7 @@ Return ONLY valid JSON. No markdown, no explanation.`;
     const content = [];
 
     // Fetch all images
-    if (imageUrls.length > 0 && page) {
+    if (imageUrls.length > 0) {
       const fetchResults = await Promise.all(
         imageUrls.map(async (imageUrl, index) => {
           const imageBase64 = await fetchImageAsBase64(page, imageUrl);
@@ -566,11 +604,12 @@ Return ONLY valid JSON. No markdown, no explanation.`;
     content.push({ type: 'text', text: textContent });
 
     // Make API call with Sonnet (always use best model for multi-day)
-    const claudeModel = process.env.CLAUDE_MODEL || DEFAULT_CLAUDE_MODEL;
+    const claudeModel = getConfiguredModels().sonnet;
     const message = await retryWithBackoff(async () => {
       return await anthropic.messages.create({
         model: claudeModel,
         max_tokens: 2048, // More tokens for multi-day response
+        ...modelParams(claudeModel),
         messages: [{ role: 'user', content: content }]
       });
     }, {

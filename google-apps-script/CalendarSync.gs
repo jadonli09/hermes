@@ -149,7 +149,7 @@ function groupEventsByDate(data) {
     const event = {
       rowNum: rowNum,
       clubName: String(clubName).trim(),
-      eventTime: String(row[cols.EVENT_TIME] || '').trim(),
+      eventTime: normalizeCellTime(row[cols.EVENT_TIME]),
       eventType: eventType,
       location: String(row[cols.LOCATION] || '').trim(),
       postUrl: String(row[cols.POST_URL] || '').trim(),
@@ -379,6 +379,25 @@ function getTimeSortOrder(timeStr) {
   }
 
   return 500; // Unknown times at end
+}
+
+/**
+ * Converts a time cell into a display string.
+ *
+ * getValues() returns a real Date for any cell Sheets recognised as a time, using
+ * the spreadsheet epoch (Dec 30 1899) as the date part. Stringifying that directly
+ * produced calendar entries reading "Sat Dec 30 1899 16:00:00 GMT-0800 (Pacific
+ * Standard Time)" instead of "4:00 PM". Text values ("Lunch") pass through.
+ */
+function normalizeCellTime(value) {
+  if (value === null || value === undefined || value === '') return '';
+
+  if (Object.prototype.toString.call(value) === '[object Date]') {
+    if (isNaN(value.getTime())) return '';
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), 'h:mm a');
+  }
+
+  return String(value).trim();
 }
 
 /**

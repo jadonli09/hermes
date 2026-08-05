@@ -18,8 +18,17 @@ export function loadConfig() {
   const anthropicApiKey = process.env.ANTHROPIC_API_KEY;
   const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
 
-  if (!instagramUsername || !instagramPassword) {
-    throw new Error('INSTAGRAM_USERNAME and INSTAGRAM_PASSWORD must be set in .env file');
+  // Apify reads public profiles logged-out, so Instagram credentials are only
+  // required by the browser backend. Not demanding them is a feature: the whole
+  // point of the managed backend is having no account to leak or get banned.
+  const scraperBackend = process.env.SCRAPER_BACKEND || 'apify';
+
+  if (scraperBackend === 'playwright' && (!instagramUsername || !instagramPassword)) {
+    throw new Error('INSTAGRAM_USERNAME and INSTAGRAM_PASSWORD must be set when SCRAPER_BACKEND=playwright');
+  }
+
+  if (scraperBackend === 'apify' && !process.env.APIFY_TOKEN) {
+    throw new Error('APIFY_TOKEN must be set when SCRAPER_BACKEND=apify (get one at https://console.apify.com/account/integrations)');
   }
 
   if (!anthropicApiKey) {
@@ -30,11 +39,32 @@ export function loadConfig() {
     throw new Error('GOOGLE_SPREADSHEET_ID must be set in .env file');
   }
 
-  // Validate date configuration
-  const startDateStr = process.env.START_DATE;
+  // Validate date configuration.
+  // START_DAYS_AGO gives a rolling window, which is what scheduled (e.g. daily) runs
+  // want: a fixed START_DATE months in the past means the scraper never hits its
+  // "3 consecutive posts older than START_DATE" early exit, so every club gets
+  // scrolled to the MAX_SCROLLS limit on every run to find nothing new.
+  const startDaysAgo = process.env.START_DAYS_AGO;
+  let startDateStr = process.env.START_DATE;
+
+  if (startDaysAgo) {
+    const days = parseInt(startDaysAgo, 10);
+
+    if (isNaN(days) || days < 0) {
+      throw new Error(`START_DAYS_AGO must be a non-negative integer, got: ${startDaysAgo}`);
+    }
+
+    const rollingStart = new Date();
+    rollingStart.setUTCDate(rollingStart.getUTCDate() - days);
+    startDateStr = rollingStart.toISOString().split('T')[0];
+
+    if (process.env.START_DATE) {
+      console.log(`📅 START_DAYS_AGO=${days} overrides START_DATE (using ${startDateStr})`);
+    }
+  }
 
   if (!startDateStr) {
-    throw new Error('START_DATE must be set in .env file (format: YYYY-MM-DD)');
+    throw new Error('START_DATE (format: YYYY-MM-DD) or START_DAYS_AGO (integer) must be set in .env file');
   }
 
   // END_DATE is optional - defaults to 1 year from now if not provided
@@ -83,7 +113,16 @@ export function loadConfig() {
     forceModel: process.env.FORCE_MODEL || null, // 'haiku' or 'sonnet' to override model selection
 
     // Category filter (null = all enabled categories)
-    category: process.env.CATEGORY || null
+    category: process.env.CATEGORY || null,
+
+    // Scraper backend
+    scraperBackend,
+    apifyToken: process.env.APIFY_TOKEN || null,
+    apifyActorId: process.env.APIFY_ACTOR_ID || 'apify/instagram-post-scraper',
+    apifyResultsLimit: parseInt(process.env.APIFY_RESULTS_LIMIT || '10', 10),
+    apifyMaxChargeUsd: process.env.APIFY_MAX_CHARGE_USD
+      ? parseFloat(process.env.APIFY_MAX_CHARGE_USD)
+      : 5
   };
 
   return config;

@@ -30,6 +30,9 @@ export class MetricsCollector {
 
       // API metrics
       totalApiCallsMade: 0,
+      totalExtractionFailures: 0,
+      totalExtractionErrors: 0,
+      extractionFailureReasons: {},
 
       // Timing metrics
       startTime: null,
@@ -92,11 +95,11 @@ export class MetricsCollector {
   recordPostProcessed(clubUsername) {
     this.metrics.totalPostsProcessed++;
     this.metrics.totalNewPostsAdded++;
-    this.metrics.totalApiCallsMade++;
+    // NOTE: API calls are counted in recordApiCall(), which the caller invokes for
+    // every post. Counting them here too double-counted every successful post.
 
     if (this.metrics.clubStats[clubUsername]) {
       this.metrics.clubStats[clubUsername].postsProcessed++;
-      this.metrics.clubStats[clubUsername].apiCallsMade++;
     }
   }
 
@@ -109,6 +112,31 @@ export class MetricsCollector {
 
     if (this.metrics.clubStats[clubUsername]) {
       this.metrics.clubStats[clubUsername].apiCallsMade++;
+    }
+  }
+
+  /**
+   * Records a post that produced no usable event data
+   * @param {string} clubUsername - Club username
+   * @param {string} reason - Why nothing was extracted (API error, or no event in post)
+   */
+  recordExtractionFailure(clubUsername, reason = 'unknown', isError = true) {
+    this.metrics.totalExtractionFailures++;
+
+    // A post that simply contains no event is normal, especially on short scheduled
+    // runs. An API or parse error is not. Only the latter should fail the run.
+    if (isError) {
+      this.metrics.totalExtractionErrors++;
+    }
+
+    // Tally distinct reasons so a systemic failure (e.g. a retired model ID) is
+    // obvious at a glance instead of buried in per-post console output
+    const key = String(reason).slice(0, 200);
+    this.metrics.extractionFailureReasons[key] = (this.metrics.extractionFailureReasons[key] || 0) + 1;
+
+    if (this.metrics.clubStats[clubUsername]) {
+      this.metrics.clubStats[clubUsername].extractionFailures =
+        (this.metrics.clubStats[clubUsername].extractionFailures || 0) + 1;
     }
   }
 
@@ -161,9 +189,85 @@ export class MetricsCollector {
       totalNewPostsAdded: this.metrics.totalNewPostsAdded,
       totalDuplicatesSkipped: this.metrics.totalDuplicatesSkipped,
       totalApiCallsMade: this.metrics.totalApiCallsMade,
+      totalExtractionFailures: this.metrics.totalExtractionFailures,
+      totalExtractionErrors: this.metrics.totalExtractionErrors,
+      extractionFailureReasons: { ...this.metrics.extractionFailureReasons },
       failedClubs: this.metrics.failedClubsList,
       duration: this.getDuration()
     };
+  }
+
+  /**
+   * Checks whether the run actually produced results, or burned API calls for nothing.
+   *
+   * A run where every Claude call came back empty looks identical to a healthy run in
+   * the console output, which is how a retired model ID went unnoticed. Treat it as a
+   * failure unless the operator explicitly opts out.
+   *
+   * @returns {Object} - { healthy: boolean, fatal: boolean, message: string|null }
+   */
+  checkRunHealth() {
+    const {
+      totalApiCallsMade,
+      totalNewPostsAdded,
+      totalExtractionFailures,
+      totalExtractionErrors
+    } = this.metrics;
+
+    // Nothing was sent to Claude, so there is nothing to judge - an empty result here
+    // just means no new posts were in range.
+    if (totalApiCallsMade === 0) {
+      return { healthy: true, fatal: false, message: null };
+    }
+
+    const topReasons = Object.entries(this.metrics.extractionFailureReasons)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([reason, count]) => `    - ${reason} (${count}x)`)
+      .join('\n');
+
+    // Fatal only when errors are what produced the empty result. A short scheduled
+    // run where the only two new posts happen to be photo dumps is a normal day,
+    // not a broken pipeline - failing on that would train everyone to ignore alerts.
+    if (totalNewPostsAdded === 0 && totalExtractionErrors > 0) {
+      return {
+        healthy: false,
+        fatal: true,
+        message:
+          `Made ${totalApiCallsMade} Claude API call(s) but extracted 0 events, ` +
+          `and ${totalExtractionErrors} of them errored. Most common reasons:\n` +
+          `${topReasons || '    - (no reasons recorded)'}\n\n` +
+          `  Likely causes:\n` +
+          `    1. The configured Claude model ID is retired or invalid (check CLAUDE_MODEL / HAIKU_MODEL)\n` +
+          `    2. Invalid or out-of-credit ANTHROPIC_API_KEY\n` +
+          `    3. Images failed to fetch and captions had no event details\n\n` +
+          `  If a zero-event run is genuinely expected, set ALLOW_EMPTY_EXTRACTION=true.`
+      };
+    }
+
+    // Errors mixed into an otherwise productive run, or a run where every post was
+    // simply eventless: surface it, but do not fail the schedule over it.
+    if (totalExtractionErrors > 0) {
+      return {
+        healthy: false,
+        fatal: false,
+        message:
+          `${totalExtractionErrors}/${totalApiCallsMade} post(s) errored during extraction. ` +
+          `Most common reasons:\n${topReasons}`
+      };
+    }
+
+    if (totalNewPostsAdded === 0) {
+      return {
+        healthy: false,
+        fatal: false,
+        message:
+          `${totalExtractionFailures} post(s) processed, none contained event data. ` +
+          `Normal for a short run; investigate if it repeats for several days.`
+      };
+    }
+
+    return { healthy: true, fatal: false, message: null };
   }
 
   /**
@@ -190,6 +294,7 @@ export class MetricsCollector {
     console.log(`New posts added to spreadsheet: ${summary.totalNewPostsAdded}`);
     console.log(`Duplicates skipped: ${summary.totalDuplicatesSkipped}`);
     console.log(`API calls made: ${summary.totalApiCallsMade}`);
+    console.log(`Posts with no event data: ${summary.totalExtractionFailures}`);
 
     if (summary.duration) {
       const seconds = Math.round(summary.duration / 1000);
@@ -239,6 +344,9 @@ export class MetricsCollector {
       newPostsAdded: summary.totalNewPostsAdded,
       duplicatesSkipped: summary.totalDuplicatesSkipped,
       apiCallsMade: summary.totalApiCallsMade,
+      extractionFailures: summary.totalExtractionFailures,
+      extractionErrors: summary.totalExtractionErrors,
+      extractionFailureReasons: summary.extractionFailureReasons,
       failedClubs: summary.failedClubs,
       duration: summary.duration
     };

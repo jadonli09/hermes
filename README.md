@@ -6,7 +6,7 @@ An automated Node.js application that scrapes Instagram posts from 80+ school cl
 
 This application automates the collection of meeting information from school club Instagram accounts by:
 1. **Scraping** Instagram posts from multiple club accounts using Playwright with smart date range filtering
-2. **Processing** each post with Claude AI (Claude Sonnet 4) to extract structured meeting data from both images and captions
+2. **Processing** each post with Claude AI (Claude Sonnet 5, or Claude Haiku 4.5 for simpler text-only posts) to extract structured meeting data from both images and captions
 3. **Populating** a Google Sheets spreadsheet with the extracted information, automatically sorted by date
 4. **Deduplicating** posts by URL to avoid processing the same post twice
 5. **Tracking progress** to enable resuming interrupted runs

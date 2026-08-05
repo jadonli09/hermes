@@ -8,3 +8,5 @@ progress.json
 .DS_Store
 *.png
 
+run-log.json
+out/

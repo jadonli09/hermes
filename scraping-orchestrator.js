@@ -14,6 +14,13 @@ export class ScrapingOrchestrator {
     this.existingPostUrls = options.existingPostUrls || new Set();
     this.metrics = options.metrics;
     this.browserManager = options.browserManager;
+    this.scrapeClubPosts = options.scrapeClubPosts;
+
+    // The inter-club delay exists to pace requests to Instagram. Backends that
+    // prefetch (Apify) have already made every network call before this loop
+    // starts, so the delay would just be dead sleep - ~4 minutes across 85
+    // accounts, every run.
+    this.needsPacing = options.needsPacing !== false;
 
     // All results collected across all clubs
     this.allResults = [];
@@ -57,7 +64,8 @@ export class ScrapingOrchestrator {
         anthropic: this.anthropic,
         progress: this.progress,
         resumeMode,
-        metrics: this.metrics
+        metrics: this.metrics,
+        scrapeClubPosts: this.scrapeClubPosts
       });
 
       if (result.success) {
@@ -79,9 +87,9 @@ export class ScrapingOrchestrator {
       }
 
       // Add delay between clubs (except for the last one)
-      if (i < clubs.length - 1) {
+      if (this.needsPacing && i < clubs.length - 1) {
         console.log(`Waiting ${delayBetweenClubs / 1000} seconds before next club...`);
-        await page.waitForTimeout(delayBetweenClubs);
+        await new Promise(resolve => setTimeout(resolve, delayBetweenClubs));
       }
     }
 
@@ -198,7 +206,8 @@ export class ScrapingOrchestrator {
       anthropic: this.anthropic,
       progress: this.progress,
       resumeMode,
-      metrics: this.metrics
+      metrics: this.metrics,
+      scrapeClubPosts: this.scrapeClubPosts
     });
   }
 

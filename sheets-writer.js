@@ -212,6 +212,35 @@ export function normalizeDate(dateStr) {
 }
 
 /**
+ * Decides whether two rows describe the same event.
+ *
+ * A single Instagram post can legitimately produce several rows:
+ *   - multi-day events (Spirit Week) emit one event per day, same post_url
+ *   - collab posts scraped from two clubs emit one event per club, same post_url
+ *
+ * So identity is (post_url, event_date, club_name), not post_url alone. Rows that
+ * match on all three are true duplicates and should move together.
+ *
+ * @param {Object} existing - Existing event row from the spreadsheet
+ * @param {Object} candidate - Incoming event
+ * @returns {boolean} - True if both describe the same event
+ */
+export function isSameEvent(existing, candidate) {
+  const url = v => String(v ?? '').trim();
+  if (url(existing.post_url) !== url(candidate.post_url)) {
+    return false;
+  }
+
+  // Sheet dates come back as MM/DD/YYYY; incoming ones are YYYY-MM-DD
+  if (normalizeDate(existing.event_date) !== normalizeDate(candidate.event_date)) {
+    return false;
+  }
+
+  const club = v => String(v ?? '').trim().toLowerCase();
+  return club(existing.club_name) === club(candidate.club_name);
+}
+
+/**
  * Compares two event objects to determine if data has changed
  * @param {Object} existing - Existing event data from spreadsheet
  * @param {Object} newEvent - New event data to compare
@@ -343,35 +372,39 @@ export async function updateOrAppendToSheet(sheets, spreadsheetId, data, existin
         continue;
       }
       
-      const existingEvents = existingEventsMap.get(postUrl);
-      
-      if (existingEvents && existingEvents.length > 0) {
-        // Event exists (may have duplicates) - check if data has changed
-        // Use the first row's data for comparison (they should all be the same if duplicates)
-        const firstExistingEvent = existingEvents[0];
-        const dataChanged = compareEventData(firstExistingEvent.data, meeting);
-        
+      // Match on identity, not just post_url. One post legitimately produces
+      // several rows - a multi-day event yields one row per day, and a collab
+      // post scraped from two clubs yields one row per club. Matching on
+      // post_url alone would write every incoming event into every one of those
+      // rows, collapsing a spirit week into N copies of a single day.
+      const candidates = (existingEventsMap.get(postUrl) || [])
+        .filter(e => isSameEvent(e.data, meeting));
+
+      if (candidates.length > 0) {
+        // Compare against the first match; genuine duplicate rows share data
+        const dataChanged = compareEventData(candidates[0].data, meeting);
+
         if (dataChanged) {
-          // Data has changed - update ALL rows with this post_url
-          // This ensures all duplicates get updated consistently
-          for (const existingEvent of existingEvents) {
+          // Update every row that is genuinely this same event, so accidental
+          // duplicate rows stay consistent with each other
+          for (const existingEvent of candidates) {
             eventsToUpdate.push({
               rowIndex: existingEvent.rowIndex,
               meeting: meeting
             });
           }
-          if (existingEvents.length > 1) {
-            console.log(`  Found ${existingEvents.length} duplicate row(s) for post ${postUrl}, will update all`);
+          if (candidates.length > 1) {
+            console.log(`  Found ${candidates.length} duplicate row(s) for this event, will update all`);
           }
         } else {
-          // Data unchanged - skip (all duplicates are already correct)
           skippedCount++;
-          if (existingEvents.length > 1) {
-            console.log(`  Skipping ${existingEvents.length} duplicate row(s) for post ${postUrl} (no changes)`);
+          if (candidates.length > 1) {
+            console.log(`  Skipping ${candidates.length} duplicate row(s) for this event (no changes)`);
           }
         }
       } else {
-        // New event - mark for append
+        // Either a brand new post, or a further day/club of a post already
+        // present - both are appends
         eventsToAppend.push(meeting);
       }
     }

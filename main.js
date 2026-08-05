@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 // Module imports
 import { loadConfig, getCredentialsPath, loadAccounts, loadClubs, selectClubsToProcess } from './config-manager.js';
 import { createBrowserManager } from './browser-manager.js';
+import { createScraperBackend } from './scrapers/index.js';
 import { createSheetsManager } from './sheets-manager.js';
 import { createOrchestrator } from './scraping-orchestrator.js';
 import { createMetricsCollector } from './metrics-collector.js';
@@ -75,20 +76,31 @@ async function main() {
     const metrics = createMetricsCollector();
     metrics.start();
 
-    // Launch browser
-    browserManager = await createBrowserManager({ headless: config.headlessMode });
-    const context = await browserManager.createContext();
-    const page = await context.newPage();
+    // Select the scraper backend. The Apify backend needs no browser and no
+    // Instagram login, so skip both entirely rather than paying for a browser
+    // launch and a fresh login on every scheduled run.
+    const scraperBackend = createScraperBackend(config);
+    console.log(`\n--- Scraper backend: ${scraperBackend.name} ---`);
+
+    let page = null;
+    let context = null;
+
+    if (scraperBackend.requiresBrowser) {
+      browserManager = await createBrowserManager({ headless: config.headlessMode });
+      context = await browserManager.createContext();
+      page = await context.newPage();
+    }
 
     // Initialize Google Sheets
     const credentialsPath = getCredentialsPath(__dirname);
     const sheetsManager = await createSheetsManager(credentialsPath, config.spreadsheetId);
     const existingPostUrls = await sheetsManager.loadExistingPostUrls();
 
-    // Log into Instagram
-    console.log('\n--- Logging into Instagram ---');
-    await loginToInstagram(page, config.instagramUsername, config.instagramPassword);
-    console.log('✓ Successfully logged into Instagram');
+    if (scraperBackend.requiresBrowser) {
+      console.log('\n--- Logging into Instagram ---');
+      await loginToInstagram(page, config.instagramUsername, config.instagramPassword);
+      console.log('✓ Successfully logged into Instagram');
+    }
 
     // Load and select accounts
     console.log('\n--- Loading Accounts Configuration ---');
@@ -116,6 +128,12 @@ async function main() {
     const anthropic = initializeClaude(config.anthropicApiKey);
     console.log('✓ Claude AI client initialized');
 
+    // Apify returns every account in one actor run, so fetch up front and let the
+    // per-club loop read from that. Keeps the orchestrator identical either way.
+    if (scraperBackend.prefetch) {
+      await scraperBackend.prefetch(clubsToProcess, config.startDate);
+    }
+
     // Create orchestrator and process clubs
     const orchestrator = createOrchestrator({
       config,
@@ -123,12 +141,16 @@ async function main() {
       progress,
       existingPostUrls,
       metrics,
-      browserManager
+      browserManager,
+      scrapeClubPosts: scraperBackend.scrapeClubPosts,
+      needsPacing: scraperBackend.requiresBrowser
     });
 
-    // Process clubs (sequential or parallel based on config)
+    // Process clubs (sequential or parallel based on config).
+    // Parallel workers exist to run multiple browsers; with no browser there is
+    // nothing to parallelize - the network fetch already happened in prefetch.
     let results;
-    if (config.parallelClubs > 1) {
+    if (config.parallelClubs > 1 && scraperBackend.requiresBrowser) {
       // Get storage state for sharing login cookies
       const storageState = await browserManager.getStorageState(context);
       results = await orchestrator.processParallel(clubsToProcess, storageState);
@@ -148,11 +170,31 @@ async function main() {
       console.log('\n⚠️  No meeting data to write to spreadsheet');
     }
 
-    // Save run log
+    // Save run log (before the health check, so a failed run still leaves diagnostics)
     metrics.saveRunLog(__dirname, config.startDateStr, config.endDateStr);
 
     // Cleanup
-    await browserManager.close();
+    if (browserManager) {
+      await browserManager.close();
+      browserManager = null;
+    }
+
+    // Fail loudly if we spent API calls and got nothing back - otherwise a broken
+    // extraction pipeline is indistinguishable from "no new posts this week"
+    const health = metrics.checkRunHealth();
+    if (!health.healthy) {
+      if (health.fatal && process.env.ALLOW_EMPTY_EXTRACTION !== 'true') {
+        console.error('\n' + '='.repeat(60));
+        console.error('❌ Run produced no data:');
+        console.error(health.message);
+        console.error('='.repeat(60));
+        process.exit(1);
+      }
+      console.warn('\n' + '='.repeat(60));
+      console.warn('⚠️  Degraded run:');
+      console.warn(health.message);
+      console.warn('='.repeat(60));
+    }
 
     // Print final success message
     metrics.printFinalSuccess();

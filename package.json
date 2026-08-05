@@ -8,7 +8,10 @@
     "start": "node main.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
-    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage"
+    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
+    "verify:handles": "node verify-handles.js",
+    "story": "node story.js",
+    "avatars": "node refresh-avatars.js"
   },
   "keywords": [
     "instagram",
@@ -19,7 +22,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.24.0",
+    "@anthropic-ai/sdk": "^0.115.0",
     "dotenv": "^16.3.1",
     "googleapis": "^128.0.0",
     "playwright": "^1.57.0",

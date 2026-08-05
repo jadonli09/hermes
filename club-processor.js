@@ -1,5 +1,5 @@
 // Club processor for handling single club scraping and AI processing
-import { scrapeClubPosts } from './scraper.js';
+import { scrapeClubPosts as defaultScrapeClubPosts } from './scraper.js';
 import { processPostWithClaude } from './ai-processor.js';
 import { saveProgress } from './utils/progress.js';
 
@@ -38,7 +38,8 @@ export async function processClub(options) {
     anthropic,
     progress,
     resumeMode = false,
-    metrics = null
+    metrics = null,
+    scrapeClubPosts = defaultScrapeClubPosts
   } = options;
 
   const results = [];
@@ -165,10 +166,22 @@ export async function processClub(options) {
             console.log(`  ✓ Extracted event info: ${firstResult.event_date || 'N/A'} ${firstResult.event_time || 'N/A'}`);
           }
         } else {
-          console.log(`  ⚠️  No event information extracted from post`);
+          // Distinguish an API/parse failure from a post that genuinely has no event
+          // in it - the run health check needs to tell those apart.
+          const apiError = resultArray.find(r => r.error)?.error;
+          const reason = apiError || 'no event data found in post';
+          console.log(`  ⚠️  No event information extracted from post (${reason})`);
+
+          if (metrics) {
+            metrics.recordExtractionFailure(clubUsername, reason, Boolean(apiError));
+          }
         }
       } catch (error) {
         console.error(`  ✗ Error processing post: ${error.message}`);
+
+        if (metrics) {
+          metrics.recordExtractionFailure(clubUsername, error.message, true);
+        }
         // Continue with next post
       }
     }
