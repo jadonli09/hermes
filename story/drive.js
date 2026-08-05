@@ -3,11 +3,20 @@ import fs from 'fs';
 import { Readable } from 'stream';
 import { google } from 'googleapis';
 
-// Sheets access alone is not enough to write files; drive.file grants access to
-// files this service account creates, which is all we need.
+// The full drive scope is required, not drive.file.
+//
+// drive.file is per-file: it only grants access to files this app itself
+// created. A folder a user shared with the service account was not created by
+// us, so every call against it returns notFound - indistinguishable from the
+// folder not being shared at all, which makes this failure very easy to
+// misdiagnose.
+//
+// This is not over-privileged in practice: a service account can still only
+// reach what has been explicitly shared with it, which here is the spreadsheet
+// and the story folder.
 const SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets',
-  'https://www.googleapis.com/auth/drive.file'
+  'https://www.googleapis.com/auth/drive'
 ];
 
 /**
@@ -50,12 +59,29 @@ export async function uploadImage(drive, folderId, name, buffer) {
     return { ...updated.data, replaced: true };
   }
 
-  const created = await drive.files.create({
-    requestBody: { name, parents: [folderId] },
-    media,
-    fields: 'id, name, webViewLink'
-  });
-  return { ...created.data, replaced: false };
+  try {
+    const created = await drive.files.create({
+      requestBody: { name, parents: [folderId] },
+      media,
+      fields: 'id, name, webViewLink'
+    });
+    return { ...created.data, replaced: false };
+  } catch (error) {
+    // A service account owns whatever it creates, and has no storage quota -
+    // even inside a folder someone else owns. Shared drives are the documented
+    // way around this, but they are a Workspace feature and unavailable on a
+    // personal Gmail account. The message Google returns points at fixes that
+    // do not apply here, so replace it with one that does.
+    if (/storage quota/i.test(error.message)) {
+      throw new Error(
+        'Google blocks service accounts from owning files, so uploads to a personal ' +
+        'Drive account are not possible (shared drives are Workspace-only).\n' +
+        '  Use --out=<dir> to write locally, ideally into a Google Drive for Desktop\n' +
+        '  folder so the images still sync to your phone.'
+      );
+    }
+    throw error;
+  }
 }
 
 /**
