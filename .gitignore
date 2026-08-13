@@ -10,3 +10,6 @@ progress.json
 
 run-log.json
 out/
+
+# Web dashboard run data
+.hermes/

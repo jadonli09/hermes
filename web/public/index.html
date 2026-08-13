@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hermes</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <h1>Hermes</h1>
+    <nav id="tabs">
+      <button data-tab="run" class="active">Run</button>
+      <button data-tab="history">History</button>
+      <button data-tab="story">Story</button>
+      <button data-tab="settings">Settings</button>
+    </nav>
+  </header>
+
+  <main>
+    <section id="tab-run" class="tab active">
+      <div class="actions">
+        <button id="start-run" class="primary">Run scrape</button>
+        <button id="cancel-run" hidden>Cancel</button>
+        <span id="run-status" class="status">idle</span>
+      </div>
+
+      <div class="bar"><div id="progress" class="fill"></div></div>
+      <p id="progress-label">No run yet</p>
+
+      <div class="tiles">
+        <div class="tile"><span id="stat-clubs">0/0</span><label>Clubs</label></div>
+        <div class="tile"><span id="stat-posts">0</span><label>Posts found</label></div>
+        <div class="tile"><span id="stat-events">0</span><label>Events extracted</label></div>
+        <div class="tile"><span id="stat-errors">0</span><label>Errors</label></div>
+      </div>
+
+      <div id="summary-card" hidden></div>
+      <ul id="error-list"></ul>
+
+      <details id="log-panel">
+        <summary>Log</summary>
+        <pre id="log"></pre>
+      </details>
+    </section>
+
+    <section id="tab-history" class="tab">
+      <table id="history-table"></table>
+    </section>
+
+    <section id="tab-story" class="tab">
+      <div class="actions">
+        <input type="date" id="story-date">
+        <button id="generate-story" class="primary">Generate story</button>
+        <span id="story-status" class="status"></span>
+      </div>
+      <div id="story-pages"></div>
+    </section>
+
+    <section id="tab-settings" class="tab">
+      <div id="settings-form"></div>
+      <p id="settings-status" class="status"></p>
+    </section>
+  </main>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

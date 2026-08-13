@@ -6,6 +6,7 @@
   "main": "main.js",
   "scripts": {
     "start": "node main.js",
+    "web": "node web/index.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
