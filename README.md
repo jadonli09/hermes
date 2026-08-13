@@ -161,6 +161,34 @@ Edit `clubs.json` to include the Instagram usernames of the clubs you want to sc
 
 **Note:** Only include the username, not the full URL (e.g., use `msjbio`, not `@msjbio` or `instagram.com/msjbio`).
 
+## Web dashboard
+
+```bash
+npm run web        # http://127.0.0.1:4317
+```
+
+Start a scrape and watch it live, browse past runs, generate and preview the daily
+story, and edit tracked accounts — without the terminal.
+
+The dashboard drives the same CLI entry points as subprocesses; it does not
+reimplement the pipeline. `npm start` and `npm run story` behave identically whether
+or not the dashboard is running, because progress events are only emitted when the
+dashboard sets `HERMES_PROGRESS=json`.
+
+Only one run happens at a time. A second start request is refused with a `409`
+rather than queued, since two concurrent runs would both spend Apify credits and
+race to write the same sheet rows.
+
+Run data lives in `.hermes/` (gitignored): `runs.jsonl` for summaries and
+`runs/<id>.jsonl` for each run's full event stream, which is what lets a finished
+run be replayed in the UI. A run whose server was killed mid-flight shows as
+`interrupted` rather than stuck at `running`.
+
+**It binds `127.0.0.1` only and has no authentication.** It can spend Apify and
+Claude credits, so do not expose it to a network without adding auth first. Secrets
+stay in `.env` — the web layer reports only whether each one is set, and refuses to
+write any key outside its allowlist.
+
 ## Running the Application
 
 Once everything is configured, run the application:
@@ -222,9 +250,20 @@ hermes/
 ├── scraper.js              # Instagram scraper using Playwright
 ├── ai-processor.js         # Claude AI processor for extracting meeting info
 ├── sheets-writer.js        # Google Sheets writer module
-├── clubs.json              # List of Instagram club usernames to scrape (80+ clubs)
+├── accounts.json           # Tracked Instagram handles, grouped into enable-able categories
+├── clubs.json              # Legacy flat club list, superseded by accounts.json
+├── web/                    # Local dashboard (npm run web)
+│   ├── index.js            # Entry point: wires the hub, runner, and server together
+│   ├── server.js           # HTTP routes and static file serving
+│   ├── runner.js           # Spawns and supervises pipeline subprocesses
+│   ├── events.js           # SSE hub with per-run buffering and replay
+│   ├── history.js          # Append-only run history in .hermes/runs.jsonl
+│   ├── ndjson.js           # Line decoding for the fd 3 progress channel
+│   ├── settings.js         # Allowlisted, atomic accounts and .env edits
+│   └── public/             # index.html, app.js, state.js, style.css
 ├── utils/
 │   ├── progress.js         # Progress tracking and resume functionality
+│   ├── progress-events.js  # Structured progress on fd 3 when HERMES_PROGRESS=json
 │   └── retry.js            # Retry utility with exponential backoff
 ├── .env                    # Environment variables (not in git)
 ├── .env.example            # Example environment variables template
