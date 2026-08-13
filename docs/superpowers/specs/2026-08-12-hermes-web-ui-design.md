@@ -71,11 +71,17 @@ structure of the second, for one small additive change to the pipeline.
 
 | File | Events |
 |---|---|
-| `main.js` | `run:start`, `phase`, `run:end` |
+| `main.js` | `run:config`, `phase`, `sheet:write`, `summary` |
 | `scraping-orchestrator.js` | `club:start`, `club:done`, `club:error` |
-| `club-processor.js` | posts-found and events-extracted counts on `club:done` |
-| `sheets-writer.js` | `sheet:write` |
-| `story.js` | `phase` for fetch / paginate / render / write |
+| `story.js` | `phase` for fetch / paginate / render, and `story:done` |
+
+`club-processor.js` and `sheets-writer.js` need no changes: club stats are already
+on `processClub`'s return value (`club-processor.js:197`) and sheet stats on
+`writeResults`' (`sheets-manager.js:98`), so both are emitted by their callers.
+
+`run:start` and `run:end` are synthesized by `web/runner.js` rather than emitted by
+the pipeline, so the UI shows a live run the instant it spawns — even if the child
+dies during config loading, before it could emit anything.
 
 ### Process model
 
@@ -94,13 +100,19 @@ crash cannot wedge the dashboard into a permanent "run in progress" state.
 NDJSON on fd 3. Every event carries a monotonic `seq` assigned by the runner.
 
 ```js
-{ t:"run:start",   runId, kind:"scrape"|"story", accounts, startDate, endDate }
-{ t:"phase",       name:"prefetch"|"process"|"write" }
+// synthesized by web/runner.js
+{ t:"run:start",   runId, kind:"scrape"|"story" }
+{ t:"run:end",     runId, ok, status:"ok"|"failed"|"cancelled", exitCode, durationMs }
+
+// emitted by the pipeline on fd 3
+{ t:"run:config",  accounts, startDate, endDate, backend }
+{ t:"phase",       name:"prefetch"|"process"|"write"|"fetch"|"paginate"|"render" }
 { t:"club:start",  index, total, account }
 { t:"club:done",   index, total, account, postsFound, eventsExtracted, durationMs }
 { t:"club:error",  index, total, account, message }
 { t:"sheet:write", updated, appended, skipped }
-{ t:"run:end",     ok, summary, durationMs }
+{ t:"summary",     summary }
+{ t:"story:done",  date, pages, files }
 { t:"log",         level, message }
 ```
 

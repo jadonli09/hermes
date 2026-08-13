@@ -65,12 +65,11 @@ describe('compareEventData', () => {
     it('should return false when data is identical', () => {
       const existing = {
         club_name: 'Chess Club',
-        meeting_date: '2024-01-15',
-        meeting_time: '3:30 PM',
-        meeting_type: 'Club Meeting',
+        event_date: '2024-01-15',
+        event_time: '3:30 PM',
+        event_type: 'Club Meeting',
         location: 'Room B101',
         description: 'Weekly meeting',
-        recurrence: 'weekly',
         confidence: '0.9'
       };
       const newEvent = { ...existing };
@@ -80,22 +79,20 @@ describe('compareEventData', () => {
     it('should return false with different whitespace', () => {
       const existing = {
         club_name: ' Chess Club ',
-        meeting_date: '2024-01-15',
-        meeting_time: '3:30 PM',
-        meeting_type: 'Club Meeting',
+        event_date: '2024-01-15',
+        event_time: '3:30 PM',
+        event_type: 'Club Meeting',
         location: 'Room B101',
         description: 'Weekly meeting',
-        recurrence: null,
         confidence: 0.9
       };
       const newEvent = {
         club_name: 'Chess Club',
-        meeting_date: '2024-01-15',
-        meeting_time: '3:30 PM',
-        meeting_type: 'Club Meeting',
+        event_date: '2024-01-15',
+        event_time: '3:30 PM',
+        event_type: 'Club Meeting',
         location: 'Room B101',
         description: 'Weekly meeting',
-        recurrence: '',
         confidence: '0.9'
       };
       expect(compareEventData(existing, newEvent)).toBe(false);
@@ -104,22 +101,20 @@ describe('compareEventData', () => {
     it('should return false when null and empty string are compared', () => {
       const existing = {
         club_name: 'Chess Club',
-        meeting_date: '2024-01-15',
-        meeting_time: null,
-        meeting_type: 'Club Meeting',
+        event_date: '2024-01-15',
+        event_time: null,
+        event_type: 'Club Meeting',
         location: undefined,
         description: '',
-        recurrence: null,
         confidence: 0.9
       };
       const newEvent = {
         club_name: 'Chess Club',
-        meeting_date: '2024-01-15',
-        meeting_time: '',
-        meeting_type: 'Club Meeting',
+        event_date: '2024-01-15',
+        event_time: '',
+        event_type: 'Club Meeting',
         location: '',
         description: null,
-        recurrence: '',
         confidence: '0.9'
       };
       expect(compareEventData(existing, newEvent)).toBe(false);
@@ -129,12 +124,11 @@ describe('compareEventData', () => {
   describe('field changes', () => {
     const baseEvent = {
       club_name: 'Chess Club',
-      meeting_date: '2024-01-15',
-      meeting_time: '3:30 PM',
-      meeting_type: 'Club Meeting',
+      event_date: '2024-01-15',
+      event_time: '3:30 PM',
+      event_type: 'Club Meeting',
       location: 'Room B101',
       description: 'Weekly meeting',
-      recurrence: 'weekly',
       confidence: '0.9'
     };
 
@@ -144,15 +138,15 @@ describe('compareEventData', () => {
       expect(compareEventData(existing, newEvent)).toBe(true);
     });
 
-    it('should return true when meeting_time changes', () => {
+    it('should return true when event_time changes', () => {
       const existing = { ...baseEvent };
-      const newEvent = { ...baseEvent, meeting_time: '4:00 PM' };
+      const newEvent = { ...baseEvent, event_time: '4:00 PM' };
       expect(compareEventData(existing, newEvent)).toBe(true);
     });
 
-    it('should return true when meeting_type changes', () => {
+    it('should return true when event_type changes', () => {
       const existing = { ...baseEvent };
-      const newEvent = { ...baseEvent, meeting_type: 'Workshop' };
+      const newEvent = { ...baseEvent, event_type: 'Workshop' };
       expect(compareEventData(existing, newEvent)).toBe(true);
     });
 
@@ -165,12 +159,6 @@ describe('compareEventData', () => {
     it('should return true when description changes', () => {
       const existing = { ...baseEvent };
       const newEvent = { ...baseEvent, description: 'Special event' };
-      expect(compareEventData(existing, newEvent)).toBe(true);
-    });
-
-    it('should return true when recurrence changes', () => {
-      const existing = { ...baseEvent };
-      const newEvent = { ...baseEvent, recurrence: 'monthly' };
       expect(compareEventData(existing, newEvent)).toBe(true);
     });
 
@@ -197,22 +185,20 @@ describe('compareEventData', () => {
     it('should return false when dates are the same but in different formats (YYYY-MM-DD vs MM/DD/YYYY)', () => {
       const existing = {
         club_name: 'Chess Club',
-        meeting_date: '01/15/2024',
-        meeting_time: '3:30 PM',
-        meeting_type: 'Club Meeting',
+        event_date: '01/15/2024',
+        event_time: '3:30 PM',
+        event_type: 'Club Meeting',
         location: 'Room B101',
         description: 'Weekly meeting',
-        recurrence: null,
         confidence: '0.9'
       };
       const newEvent = {
         club_name: 'Chess Club',
-        meeting_date: '2024-01-15',
-        meeting_time: '3:30 PM',
-        meeting_type: 'Club Meeting',
+        event_date: '2024-01-15',
+        event_time: '3:30 PM',
+        event_type: 'Club Meeting',
         location: 'Room B101',
         description: 'Weekly meeting',
-        recurrence: null,
         confidence: '0.9'
       };
       expect(compareEventData(existing, newEvent)).toBe(false);
@@ -221,22 +207,20 @@ describe('compareEventData', () => {
     it('should return false when dates are the same (M/D/YYYY vs YYYY-MM-DD)', () => {
       const existing = {
         club_name: 'Test Club',
-        meeting_date: '1/5/2024',
-        meeting_time: 'Lunch',
-        meeting_type: 'Meeting',
+        event_date: '1/5/2024',
+        event_time: 'Lunch',
+        event_type: 'Meeting',
         location: 'Library',
         description: 'Test',
-        recurrence: null,
         confidence: '0.8'
       };
       const newEvent = {
         club_name: 'Test Club',
-        meeting_date: '2024-01-05',
-        meeting_time: 'Lunch',
-        meeting_type: 'Meeting',
+        event_date: '2024-01-05',
+        event_time: 'Lunch',
+        event_type: 'Meeting',
         location: 'Library',
         description: 'Test',
-        recurrence: null,
         confidence: '0.8'
       };
       expect(compareEventData(existing, newEvent)).toBe(false);
@@ -245,22 +229,20 @@ describe('compareEventData', () => {
     it('should return true when dates are actually different', () => {
       const existing = {
         club_name: 'Chess Club',
-        meeting_date: '01/15/2024',
-        meeting_time: '3:30 PM',
-        meeting_type: 'Club Meeting',
+        event_date: '01/15/2024',
+        event_time: '3:30 PM',
+        event_type: 'Club Meeting',
         location: 'Room B101',
         description: 'Weekly meeting',
-        recurrence: null,
         confidence: '0.9'
       };
       const newEvent = {
         club_name: 'Chess Club',
-        meeting_date: '2024-01-20',
-        meeting_time: '3:30 PM',
-        meeting_type: 'Club Meeting',
+        event_date: '2024-01-20',
+        event_time: '3:30 PM',
+        event_type: 'Club Meeting',
         location: 'Room B101',
         description: 'Weekly meeting',
-        recurrence: null,
         confidence: '0.9'
       };
       expect(compareEventData(existing, newEvent)).toBe(true);
@@ -281,7 +263,7 @@ describe('compareEventData', () => {
     });
 
     it('should detect change when field is missing in one object', () => {
-      const existing = { club_name: 'Test', meeting_time: '3:30 PM' };
+      const existing = { club_name: 'Test', event_time: '3:30 PM' };
       const newEvent = { club_name: 'Test' };
       expect(compareEventData(existing, newEvent)).toBe(true);
     });
@@ -289,22 +271,20 @@ describe('compareEventData', () => {
     it('should handle numeric confidence values', () => {
       const existing = {
         club_name: 'Test',
-        meeting_date: '',
-        meeting_time: '',
-        meeting_type: '',
+        event_date: '',
+        event_time: '',
+        event_type: '',
         location: '',
         description: '',
-        recurrence: '',
         confidence: 0.9
       };
       const newEvent = {
         club_name: 'Test',
-        meeting_date: '',
-        meeting_time: '',
-        meeting_type: '',
+        event_date: '',
+        event_time: '',
+        event_type: '',
         location: '',
         description: '',
-        recurrence: '',
         confidence: 0.9
       };
       expect(compareEventData(existing, newEvent)).toBe(false);
@@ -313,22 +293,20 @@ describe('compareEventData', () => {
     it('should detect confidence change between numeric and string', () => {
       const existing = {
         club_name: 'Test',
-        meeting_date: '',
-        meeting_time: '',
-        meeting_type: '',
+        event_date: '',
+        event_time: '',
+        event_type: '',
         location: '',
         description: '',
-        recurrence: '',
         confidence: 0.9
       };
       const newEvent = {
         club_name: 'Test',
-        meeting_date: '',
-        meeting_time: '',
-        meeting_type: '',
+        event_date: '',
+        event_time: '',
+        event_type: '',
         location: '',
         description: '',
-        recurrence: '',
         confidence: 0.85
       };
       expect(compareEventData(existing, newEvent)).toBe(true);

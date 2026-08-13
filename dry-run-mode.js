@@ -4,6 +4,7 @@ import path from 'path';
 import Anthropic from '@anthropic-ai/sdk';
 import { authenticateSheets } from './sheets-writer.js';
 import { getConfiguredModels, modelParams } from './ai-processor.js';
+import { loadAccounts } from './config-manager.js';
 
 /**
  * Runs a dry-run validation of the configuration
@@ -134,43 +135,42 @@ export async function runDryRun(config, basePath) {
     }
   }
 
-  // 4. Load and validate clubs
-  console.log('\n--- 4. Clubs Configuration ---');
+  // 4. Load and validate accounts
+  console.log('\n--- 4. Accounts Configuration ---');
   try {
-    const clubsPath = path.join(basePath, 'clubs.json');
+    // main.js loads through loadAccounts, so the dry run must too. Reading
+    // clubs.json directly reported 80 accounts while the real run processed 85,
+    // which makes the dry run worse than useless as a pre-flight check.
+    const { accounts, categories } = loadAccounts(basePath, config.category);
 
-    if (!fs.existsSync(clubsPath)) {
-      throw new Error(`Clubs file not found: ${clubsPath}`);
+    results.clubsFound = accounts.length;
+    console.log(`✓ Found ${results.clubsFound} enabled account(s) in accounts.json`);
+
+    const summary = Object.entries(categories)
+      .map(([name, cat]) => `${name}: ${cat.accounts?.length || 0}${cat.enabled === false ? ' (disabled)' : ''}`);
+    console.log(`  Categories: ${summary.join(', ')}`);
+
+    if (config.category) {
+      console.log(`  Filtering to category: ${config.category}`);
     }
 
-    const clubsData = JSON.parse(fs.readFileSync(clubsPath, 'utf-8'));
-
-    if (!clubsData.clubs || !Array.isArray(clubsData.clubs)) {
-      throw new Error('Invalid clubs.json format');
-    }
-
-    results.clubsFound = clubsData.clubs.length;
-    console.log(`✓ Found ${results.clubsFound} club(s) in clubs.json`);
-
-    // Determine which clubs would be processed
+    // Determine which accounts would be processed
     if (config.testClub) {
-      if (clubsData.clubs.includes(config.testClub)) {
+      if (accounts.includes(config.testClub)) {
         results.clubsToProcess = [config.testClub];
         console.log(`\n  Test mode: Would process @${config.testClub}`);
       } else {
-        console.error(`\n  ✗ TEST_CLUB "${config.testClub}" not found in clubs.json`);
+        console.error(`\n  ✗ TEST_CLUB "${config.testClub}" not found in accounts.json`);
       }
     } else {
-      // Simulate random selection
-      const shuffled = [...clubsData.clubs].sort(() => Math.random() - 0.5);
-      results.clubsToProcess = shuffled.slice(0, Math.min(config.maxClubsToProcess, shuffled.length));
-      console.log(`\n  Would process ${results.clubsToProcess.length} club(s):`);
+      results.clubsToProcess = accounts.slice(0, Math.min(config.maxClubsToProcess, accounts.length));
+      console.log(`\n  Would process ${results.clubsToProcess.length} account(s):`);
       results.clubsToProcess.forEach((club, i) => {
         console.log(`    ${i + 1}. @${club}`);
       });
     }
   } catch (error) {
-    console.error(`✗ Clubs configuration error: ${error.message}`);
+    console.error(`✗ Accounts configuration error: ${error.message}`);
   }
 
   // 5. Show mock output example
@@ -178,15 +178,14 @@ export async function runDryRun(config, basePath) {
   console.log('If a post is found, it would be processed into this format:');
   console.log(JSON.stringify({
     club_name: 'example_club',
-    meeting_date: '2025-01-15',
-    meeting_time: '3:30 PM',
-    meeting_type: 'Club Meeting',
+    event_date: '2026-01-15',
+    event_time: '3:30 PM',
+    event_type: 'Club Meeting',
     location: 'Room B101',
     description: 'Weekly club meeting to discuss upcoming events',
     confidence: 0.85,
-    recurrence: 'Weekly',
     post_url: 'https://www.instagram.com/p/ABC123/',
-    posted_date: '2025-01-10',
+    posted_date: '2026-01-10',
     account_name: 'example_club'
   }, null, 2));
 
