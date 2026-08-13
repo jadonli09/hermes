@@ -16,6 +16,7 @@ import { sortEvents, paginate } from './story/paginate.js';
 import { buildPage } from './story/template.js';
 import { renderPages } from './story/render.js';
 import { authenticateDrive, uploadImage, assertFolderWritable } from './story/drive.js';
+import { emit } from './utils/progress-events.js';
 
 dotenv.config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -80,6 +81,7 @@ async function main() {
     console.log(`✓ Drive folder: ${folder.name}`);
   }
 
+  emit('phase', { name: 'fetch' });
   const events = sortEvents(await fetchEventsForDate(credentialsPath, spreadsheetId, isoDate));
   console.log(`✓ ${events.length} event(s) on ${isoDate}`);
 
@@ -87,9 +89,11 @@ async function main() {
   // a story reading "no events today" is worse than no story.
   if (events.length === 0) {
     console.log('\nNothing to post. No images generated.');
+    emit('story:done', { date: isoDate, pages: 0, files: [] });
     return;
   }
 
+  emit('phase', { name: 'paginate' });
   const pages = paginate(events);
   console.log(`✓ ${pages.length} page(s): [${pages.map(p => p.length).join(', ')}]`);
 
@@ -101,23 +105,31 @@ async function main() {
     totalEvents: events.length
   }));
 
+  emit('phase', { name: 'render' });
   const images = await renderPages(html);
   console.log(`✓ Rendered ${images.length} image(s)`);
+
+  const written = [];
 
   if (outDir) {
     fs.mkdirSync(outDir, { recursive: true });
     for (const [i, buffer] of images.entries()) {
-      const file = path.join(outDir, `story-${isoDate}-p${i + 1}.png`);
+      const name = `story-${isoDate}-p${i + 1}.png`;
+      const file = path.join(outDir, name);
       fs.writeFileSync(file, buffer);
+      written.push(name);
       console.log(`  ${file}`);
     }
   } else {
     for (const [i, buffer] of images.entries()) {
       const name = `story-${isoDate}-p${i + 1}.png`;
       const result = await uploadImage(drive, folderId, name, buffer);
+      written.push(name);
       console.log(`  ${result.replaced ? 'replaced' : 'uploaded'} ${name}`);
     }
   }
+
+  emit('story:done', { date: isoDate, pages: written.length, files: written });
 
   console.log('\n✅ Done');
 }

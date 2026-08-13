@@ -12,6 +12,7 @@ import { createMetricsCollector } from './metrics-collector.js';
 import { loginToInstagram } from './scraper.js';
 import { initializeClaude } from './ai-processor.js';
 import { loadProgress, saveProgress, clearProgress, createProgress } from './utils/progress.js';
+import { emit } from './utils/progress-events.js';
 
 // Get current directory for ES6 modules
 const __filename = fileURLToPath(import.meta.url);
@@ -123,6 +124,13 @@ async function main() {
     const clubsToProcess = selectClubsToProcess(allClubs, config, progress);
     metrics.setTotalClubs(clubsToProcess.length);
 
+    emit('run:config', {
+      accounts: clubsToProcess.length,
+      startDate: config.startDateStr,
+      endDate: config.endDateStr,
+      backend: scraperBackend.name
+    });
+
     // Initialize Claude AI client
     console.log('\n--- Initializing Claude AI ---');
     const anthropic = initializeClaude(config.anthropicApiKey);
@@ -131,6 +139,7 @@ async function main() {
     // Apify returns every account in one actor run, so fetch up front and let the
     // per-club loop read from that. Keeps the orchestrator identical either way.
     if (scraperBackend.prefetch) {
+      emit('phase', { name: 'prefetch' });
       await scraperBackend.prefetch(clubsToProcess, config.startDate);
     }
 
@@ -149,6 +158,8 @@ async function main() {
     // Process clubs (sequential or parallel based on config).
     // Parallel workers exist to run multiple browsers; with no browser there is
     // nothing to parallelize - the network fetch already happened in prefetch.
+    emit('phase', { name: 'process' });
+
     let results;
     if (config.parallelClubs > 1 && scraperBackend.requiresBrowser) {
       // Get storage state for sharing login cookies
@@ -164,14 +175,22 @@ async function main() {
 
     // Write results to spreadsheet
     if (results.length > 0) {
-      await sheetsManager.writeResults(results);
+      emit('phase', { name: 'write' });
+      const stats = await sheetsManager.writeResults(results);
+      emit('sheet:write', {
+        updated: stats?.updated ?? 0,
+        appended: stats?.appended ?? 0,
+        skipped: stats?.skipped ?? 0
+      });
       await sheetsManager.sortByDate();
     } else {
       console.log('\n⚠️  No meeting data to write to spreadsheet');
+      emit('sheet:write', { updated: 0, appended: 0, skipped: 0 });
     }
 
     // Save run log (before the health check, so a failed run still leaves diagnostics)
     metrics.saveRunLog(__dirname, config.startDateStr, config.endDateStr);
+    emit('summary', { summary: metrics.getSummary() });
 
     // Cleanup
     if (browserManager) {

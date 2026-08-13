@@ -1,6 +1,7 @@
 // Scraping orchestrator for coordinating multi-club processing
 import { processClub, isBlockingError } from './club-processor.js';
 import { saveProgress } from './utils/progress.js';
+import { emit } from './utils/progress-events.js';
 
 /**
  * Orchestrates the scraping of multiple clubs
@@ -55,6 +56,9 @@ export class ScrapingOrchestrator {
         this.consecutiveFailures = 0;
       }
 
+      emit('club:start', { index: i + 1, total: clubs.length, account: clubUsername });
+      const clubStartedAt = Date.now();
+
       const result = await processClub({
         page,
         clubUsername,
@@ -67,6 +71,24 @@ export class ScrapingOrchestrator {
         metrics: this.metrics,
         scrapeClubPosts: this.scrapeClubPosts
       });
+
+      if (result.success) {
+        emit('club:done', {
+          index: i + 1,
+          total: clubs.length,
+          account: clubUsername,
+          postsFound: result.stats?.totalScraped ?? 0,
+          eventsExtracted: result.results?.length ?? 0,
+          durationMs: Date.now() - clubStartedAt
+        });
+      } else {
+        emit('club:error', {
+          index: i + 1,
+          total: clubs.length,
+          account: clubUsername,
+          message: result.error || 'unknown error'
+        });
+      }
 
       if (result.success) {
         this.consecutiveFailures = 0;
