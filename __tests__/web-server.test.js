@@ -1,4 +1,5 @@
 import fs from 'fs';
+import http from 'http';
 import os from 'os';
 import path from 'path';
 import { createEventHub } from '../web/events.js';
@@ -153,6 +154,46 @@ describe('the web server', () => {
   it('refuses to serve a file outside the story directory', async () => {
     const response = await fetch(`${base}/api/story/2026-08-12/..%2F..%2F.env`);
     expect(response.status).toBe(400);
+  });
+
+  it('rejects a request whose Host header points at another domain', async () => {
+    // DNS rebinding: an attacker domain re-resolved to 127.0.0.1 would otherwise
+    // be same-origin with the dashboard and able to read and write everything.
+    // fetch() treats Host as a forbidden header and drops it, so this goes out
+    // over a raw request.
+    const status = await new Promise((resolve, reject) => {
+      const request = http.request({
+        host: '127.0.0.1',
+        port: server.address().port,
+        path: '/api/settings',
+        method: 'GET',
+        headers: { host: 'evil.example.com' }
+      }, response => {
+        response.resume();
+        resolve(response.statusCode);
+      });
+      request.on('error', reject);
+      request.end();
+    });
+
+    expect(status).toBe(403);
+  });
+
+  it('rejects a cross-origin request that starts a run', async () => {
+    // POST /api/runs takes no body and no custom headers, so it is a CORS
+    // simple request: any page could fire it and spend Apify credit.
+    const response = await fetch(`${base}/api/runs`, {
+      method: 'POST',
+      headers: { origin: 'https://evil.example.com' }
+    });
+
+    expect(response.status).toBe(403);
+    expect(started).toHaveLength(0);
+  });
+
+  it('allows a request from the dashboard itself', async () => {
+    const response = await fetch(`${base}/api/state`, { headers: { origin: base } });
+    expect(response.status).toBe(200);
   });
 
   it('404s an unknown route', async () => {

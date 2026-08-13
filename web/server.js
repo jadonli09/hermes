@@ -22,6 +22,36 @@ const MIME = {
   '.json': 'application/json; charset=utf-8'
 };
 
+/**
+ * Binding to 127.0.0.1 keeps other machines out, but it does not keep out a web
+ * page the user happens to visit: their own browser originates the request, so
+ * any site can POST here and start a run that spends real Apify credit.
+ *
+ * Two checks close that. Host pinning defeats DNS rebinding, where an attacker
+ * domain is re-resolved to 127.0.0.1 and becomes same-origin with us. Origin
+ * pinning defeats plain CSRF, including the "simple request" forms that browsers
+ * send without a preflight.
+ */
+function isTrustedRequest(req) {
+  const host = req.headers.host || '';
+  const hostname = host.replace(/:\d+$/, '');
+  if (hostname !== '127.0.0.1' && hostname !== 'localhost' && hostname !== '[::1]') {
+    return false;
+  }
+
+  // Same-origin requests from our own page send no Origin on GET, and our own
+  // origin on writes. Anything else is another site talking to us.
+  const origin = req.headers.origin;
+  if (!origin) return true;
+
+  try {
+    const originHost = new URL(origin).host.replace(/:\d+$/, '');
+    return originHost === '127.0.0.1' || originHost === 'localhost' || originHost === '[::1]';
+  } catch {
+    return false;
+  }
+}
+
 function sendJson(res, code, body) {
   const text = JSON.stringify(body);
   res.writeHead(code, {
@@ -72,6 +102,10 @@ export function createServer({ projectDir, dataDir, storyDir, runner, hub }) {
   return http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://127.0.0.1');
     const route = `${req.method} ${url.pathname}`;
+
+    if (!isTrustedRequest(req)) {
+      return sendJson(res, 403, { error: 'Request did not originate from the local dashboard' });
+    }
 
     try {
       if (route === 'GET /api/state') {
