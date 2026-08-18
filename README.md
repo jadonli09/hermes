@@ -197,6 +197,21 @@ run be replayed in the UI. A run whose server was killed mid-flight shows as
 The dashboard is set in the same faces as the story graphic (`assets/fonts`), served
 at `/fonts/*.woff2`.
 
+## Logo
+
+The mark is a terminal prompt, the name, and a block cursor — `> HERMES ▌` — set in
+JetBrains Mono in the story graphic's palette. `logo/template.js` is the single source
+of its geometry; the dashboard masthead reproduces it in CSS (with a live cursor), and
+
+```bash
+npm run logo
+```
+
+renders `assets/logo/`: SVG sources (font embedded, so they stand alone), transparent
+wordmark PNGs for dark and light backgrounds, square marks (`>H`) at 1024/512/256,
+1600×400 headers, a 1280×640 social card, and the favicon set the dashboard serves at
+`/favicon.svg` and `/apple-touch-icon.png`.
+
 **It binds `127.0.0.1` only and has no authentication.** It can spend Apify and
 Claude credits, so do not expose it to a network without adding auth first. Secrets
 stay in `.env` — the web layer reports only whether each one is set, and refuses to

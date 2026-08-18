@@ -1,4 +1,4 @@
-// Twelve routes and a static directory do not need a framework, and not having
+// Thirteen routes and a static directory do not need a framework, and not having
 // one keeps package.json honest about what this actually depends on.
 //
 // Binds 127.0.0.1 only. There is no auth, and this process can spend money.
@@ -24,7 +24,14 @@ const MIME = {
   '.js': 'text/javascript; charset=utf-8',
   '.png': 'image/png',
   '.json': 'application/json; charset=utf-8',
-  '.woff2': 'font/woff2'
+  '.woff2': 'font/woff2',
+  '.svg': 'image/svg+xml'
+};
+
+// Browser-conventional names, mapped onto the rendered set in assets/logo.
+const LOGO_ROUTES = {
+  '/favicon.svg': 'favicon.svg',
+  '/apple-touch-icon.png': 'apple-touch-icon-180.png'
 };
 
 /**
@@ -230,6 +237,13 @@ export function createServer({ projectDir, dataDir, storyDir, runner, hub, apify
         if (!fs.existsSync(file)) return sendJson(res, 404, { error: 'Not found' });
 
         res.writeHead(200, { 'Content-Type': 'image/png' });
+        return fs.createReadStream(file).pipe(res);
+      }
+
+      if (req.method === 'GET' && LOGO_ROUTES[url.pathname]) {
+        const file = path.join(projectDir, 'assets', 'logo', LOGO_ROUTES[url.pathname]);
+        if (!fs.existsSync(file)) return sendJson(res, 404, { error: 'Not found' });
+        res.writeHead(200, { 'Content-Type': MIME[path.extname(file)], 'Cache-Control': 'public, max-age=86400' });
         return fs.createReadStream(file).pipe(res);
       }
 

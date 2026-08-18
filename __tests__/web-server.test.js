@@ -291,3 +291,24 @@ describe('brand fonts', () => {
     expect((await fetch(`${base}/fonts/Satoshi-Variable.ttf`)).status).toBe(404);
   });
 });
+
+describe('logo files', () => {
+  it('serves the favicon and touch icon from assets/logo', async () => {
+    fs.mkdirSync(path.join(dir, 'assets', 'logo'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'assets', 'logo', 'favicon.svg'), '<svg/>');
+    fs.writeFileSync(path.join(dir, 'assets', 'logo', 'apple-touch-icon-180.png'), 'png-bytes');
+
+    const svg = await fetch(`${base}/favicon.svg`);
+    expect(svg.status).toBe(200);
+    expect(svg.headers.get('content-type')).toBe('image/svg+xml');
+    expect(await svg.text()).toBe('<svg/>');
+
+    const touch = await fetch(`${base}/apple-touch-icon.png`);
+    expect(touch.status).toBe(200);
+    expect(touch.headers.get('content-type')).toBe('image/png');
+  });
+
+  it('404s when the logo has not been rendered yet', async () => {
+    expect((await fetch(`${base}/favicon.svg`)).status).toBe(404);
+  });
+});
