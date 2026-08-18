@@ -76,3 +76,57 @@ describe('runEventsPath', () => {
     expect(() => runEventsPath(dir, 'a/b')).toThrow(/invalid run id/i);
   });
 });
+
+describe('backfillRuns', () => {
+  const writeEvents = (id, events) => {
+    const file = runEventsPath(dir, id);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, events.map((e, i) => JSON.stringify({ ...e, seq: i + 1 })).join('\n') + '\n');
+  };
+
+  it('recovers summary, story, and usage for finished runs recorded before they were persisted', async () => {
+    const { backfillRuns } = await import('../web/history.js');
+
+    appendRecord(dir, { id: 'old', kind: 'scrape', status: 'running', startedAt: 1000 });
+    appendRecord(dir, { id: 'old', status: 'ok', endedAt: 5000 });
+    writeEvents('old', [
+      { t: 'run:start', runId: 'old' },
+      { t: 'claude:usage', model: 'claude-haiku-4-5', inputTokens: 10, outputTokens: 2 },
+      { t: 'summary', summary: { clubsProcessed: 3 } },
+      { t: 'story:done', date: '2026-08-13', pages: 1, files: ['story-2026-08-13-p1.png'] },
+      { t: 'run:end', status: 'ok' }
+    ]);
+
+    const patched = backfillRuns(dir, readRuns(dir));
+
+    expect(patched[0].summary).toEqual({ clubsProcessed: 3 });
+    expect(patched[0].story).toEqual({ date: '2026-08-13', pages: 1 });
+    expect(patched[0].usage['claude-haiku-4-5']).toMatchObject({ calls: 1, inputTokens: 10 });
+
+    // Persisted, so the event file is only parsed once.
+    fs.rmSync(runEventsPath(dir, 'old'));
+    expect(readRuns(dir)[0].summary).toEqual({ clubsProcessed: 3 });
+  });
+
+  it('marks a run it could not recover so it is not re-read every request', async () => {
+    const { backfillRuns } = await import('../web/history.js');
+    appendRecord(dir, { id: 'lost', kind: 'scrape', status: 'ok', startedAt: 1000, endedAt: 2000 });
+
+    backfillRuns(dir, readRuns(dir));
+    const [run] = readRuns(dir);
+
+    expect(run.summary).toBeUndefined();
+    expect(run.backfilled).toBe(true);
+    expect(backfillRuns(dir, [run])).toEqual([run]);   // second pass is a no-op
+  });
+
+  it('leaves running and already-complete records alone', async () => {
+    const { backfillRuns } = await import('../web/history.js');
+    appendRecord(dir, { id: 'live', kind: 'scrape', status: 'running', startedAt: 1000 });
+    appendRecord(dir, { id: 'done', kind: 'scrape', status: 'ok', startedAt: 500, endedAt: 900, summary: { clubsProcessed: 1 } });
+
+    const before = readRuns(dir, { activeRunId: 'live' });
+    expect(backfillRuns(dir, before)).toEqual(before);
+    expect(fs.readFileSync(path.join(dir, 'runs.jsonl'), 'utf-8').split('\n').filter(Boolean)).toHaveLength(2);
+  });
+});

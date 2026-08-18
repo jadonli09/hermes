@@ -1,4 +1,4 @@
-// Eleven routes and a static directory do not need a framework, and not having
+// Twelve routes and a static directory do not need a framework, and not having
 // one keeps package.json honest about what this actually depends on.
 //
 // Binds 127.0.0.1 only. There is no auth, and this process can spend money.
@@ -6,20 +6,25 @@ import http from 'http';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { readRuns, runEventsPath } from './history.js';
-import { readSettings, writeSettings } from './settings.js';
+import { backfillRuns, readRuns, runEventsPath } from './history.js';
+import { readSecret, readSettings, writeSettings } from './settings.js';
+import { fetchApifyUsage } from './apify-usage.js';
+import { summarizeRuns } from './usage.js';
 
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public');
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const STORY_FILE = /^story-\d{4}-\d{2}-\d{2}-p\d+\.png$/;
+const FONT_FILE = /^\/fonts\/([A-Za-z0-9-]+\.woff2)$/;
 const MAX_BODY_BYTES = 1_000_000;
+const APIFY_CACHE_MS = 60_000;   // Apify asks for gentle polling; the number moves slowly anyway
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
   '.png': 'image/png',
-  '.json': 'application/json; charset=utf-8'
+  '.json': 'application/json; charset=utf-8',
+  '.woff2': 'font/woff2'
 };
 
 /**
@@ -98,7 +103,16 @@ function startRun(res, runner, options) {
   }
 }
 
-export function createServer({ projectDir, dataDir, storyDir, runner, hub }) {
+export function createServer({ projectDir, dataDir, storyDir, runner, hub, apifyFetch = globalThis.fetch }) {
+  let apifyCache = null;   // { at, value }
+
+  async function apifyUsage() {
+    if (apifyCache && Date.now() - apifyCache.at < APIFY_CACHE_MS) return apifyCache.value;
+    const value = await fetchApifyUsage({ token: readSecret(projectDir, 'APIFY_TOKEN'), fetch: apifyFetch });
+    if (value.ok) apifyCache = { at: Date.now(), value };   // a failure is retried on the next request
+    return value;
+  }
+
   return http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://127.0.0.1');
     const route = `${req.method} ${url.pathname}`;
@@ -137,7 +151,7 @@ export function createServer({ projectDir, dataDir, storyDir, runner, hub }) {
       if (route === 'GET /api/history') {
         const limit = Math.min(Number(url.searchParams.get('limit')) || 50, 500);
         return sendJson(res, 200, {
-          runs: readRuns(dataDir, { limit, activeRunId: runner.getActive()?.runId })
+          runs: backfillRuns(dataDir, readRuns(dataDir, { limit, activeRunId: runner.getActive()?.runId }))
         });
       }
 
@@ -173,6 +187,16 @@ export function createServer({ projectDir, dataDir, storyDir, runner, hub }) {
         }
       }
 
+      if (route === 'GET /api/usage') {
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+        const runs = backfillRuns(dataDir, readRuns(dataDir, { limit: 100_000, activeRunId: runner.getActive()?.runId }));
+        return sendJson(res, 200, {
+          claude: summarizeRuns(runs, { since: monthStart }),
+          apify: await apifyUsage()
+        });
+      }
+
       if (route === 'GET /api/settings') {
         return sendJson(res, 200, readSettings(projectDir));
       }
@@ -206,6 +230,16 @@ export function createServer({ projectDir, dataDir, storyDir, runner, hub }) {
         if (!fs.existsSync(file)) return sendJson(res, 404, { error: 'Not found' });
 
         res.writeHead(200, { 'Content-Type': 'image/png' });
+        return fs.createReadStream(file).pipe(res);
+      }
+
+      // The dashboard is set in the same faces as the story graphic, which live
+      // in assets/fonts rather than under web/public.
+      const font = url.pathname.match(FONT_FILE);
+      if (req.method === 'GET' && font) {
+        const file = path.join(projectDir, 'assets', 'fonts', font[1]);
+        if (!fs.existsSync(file)) return sendJson(res, 404, { error: 'Not found' });
+        res.writeHead(200, { 'Content-Type': MIME['.woff2'], 'Cache-Control': 'public, max-age=86400' });
         return fs.createReadStream(file).pipe(res);
       }
 

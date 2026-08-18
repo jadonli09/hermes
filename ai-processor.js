@@ -1,6 +1,7 @@
 // Claude AI processor module for extracting meeting information from posts
 import Anthropic from '@anthropic-ai/sdk';
 import { retryWithBackoff } from './utils/retry.js';
+import { emit } from './utils/progress-events.js';
 import { validateClaudeResponse, validateMultiDayResponse } from './schemas/claude-response.js';
 
 // Default Claude model - can be overridden via CLAUDE_MODEL env var
@@ -19,6 +20,22 @@ export function getConfiguredModels() {
     sonnet: process.env.CLAUDE_MODEL || DEFAULT_CLAUDE_MODEL,
     haiku: process.env.HAIKU_MODEL || DEFAULT_HAIKU_MODEL
   };
+}
+
+/**
+ * Reports what a Claude call cost so the dashboard can keep a running spend
+ * estimate. Uses the model the API says answered, not the one we asked for, so
+ * an alias like claude-sonnet-5 is priced as the snapshot it resolved to.
+ */
+function reportUsage(message, requestedModel) {
+  const usage = message.usage || {};
+  emit('claude:usage', {
+    model: message.model || requestedModel,
+    inputTokens: usage.input_tokens || 0,
+    outputTokens: usage.output_tokens || 0,
+    cacheReadTokens: usage.cache_read_input_tokens || 0,
+    cacheWriteTokens: usage.cache_creation_input_tokens || 0
+  });
 }
 
 export function modelParams(claudeModel) {
@@ -411,7 +428,8 @@ Quick Reference:
       initialDelay: 2000, // Longer initial delay for API calls
       maxDelay: 30000
     });
-    
+    reportUsage(message, claudeModel);
+
     // Extract text response from Claude
     if (!message.content || message.content.length === 0) {
       throw new Error('Empty response from Claude API');
@@ -617,6 +635,7 @@ Return ONLY valid JSON. No markdown, no explanation.`;
       initialDelay: 2000,
       maxDelay: 30000
     });
+    reportUsage(message, claudeModel);
 
     if (!message.content || message.content.length === 0) {
       throw new Error('Empty response from Claude API (multi-day)');

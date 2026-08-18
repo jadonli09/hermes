@@ -2,7 +2,9 @@
 // that actually carries risk, so it lives here as a pure function and gets
 // tested. Everything in app.js is DOM plumbing over this.
 //
-// Loaded both as an ES module in the browser and by Jest, so it imports nothing.
+// Loaded both as an ES module in the browser and by Jest, so it only imports
+// its sibling pricing.js, which has the same constraint.
+import { addUsage } from './pricing.js';
 
 const MAX_LOG = 500;
 
@@ -29,7 +31,9 @@ export function initialState() {
     stderr: null,
     startDate: null,
     endDate: null,
-    backend: null
+    backend: null,
+    usage: {},             // model -> token buckets, for the live cost estimate
+    rollcall: {}           // account position -> 'done' | 'error', for the tick strip
   };
 }
 
@@ -63,6 +67,7 @@ export function reduce(state, event) {
         clubsTotal: event.total || next.clubsTotal,
         postsFound: next.postsFound + (event.postsFound || 0),
         eventsExtracted: next.eventsExtracted + (event.eventsExtracted || 0),
+        rollcall: { ...next.rollcall, [event.index]: 'done' },
         current: null
       };
 
@@ -74,6 +79,7 @@ export function reduce(state, event) {
         clubsDone: event.index,
         clubsTotal: event.total || next.clubsTotal,
         errors: [...next.errors, { account: event.account, message: event.message }],
+        rollcall: { ...next.rollcall, [event.index]: 'error' },
         current: null
       };
 
@@ -82,6 +88,9 @@ export function reduce(state, event) {
 
     case 'summary':
       return { ...next, summary: event.summary };
+
+    case 'claude:usage':
+      return { ...next, usage: addUsage(next.usage, event) };
 
     case 'story:done':
       return { ...next, story: { date: event.date, pages: event.pages, files: event.files } };

@@ -130,6 +130,14 @@ export function readSettings(projectDir) {
   return { accounts, env, secrets };
 }
 
+/**
+ * A secret's value, for server-side use only. Nothing that calls this may put
+ * the value in a response - the dashboard reports secrets as set/missing.
+ */
+export function readSecret(projectDir, key) {
+  return parseEnv(readEnvText(projectDir))[key] || '';
+}
+
 export function writeSettings(projectDir, patch = {}) {
   // Validate everything before writing anything, so a bad handle in the third
   // category cannot leave .env updated and accounts.json not.

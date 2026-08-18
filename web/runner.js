@@ -11,6 +11,7 @@ import fs from 'fs';
 import path from 'path';
 import { createLineDecoder, parseEvent } from './ndjson.js';
 import { appendRecord, runEventsPath } from './history.js';
+import { addUsage } from './usage.js';
 
 const STDERR_TAIL_LINES = 20;
 const SIGKILL_GRACE_MS = 10000;
@@ -46,6 +47,12 @@ export function createRunner({ projectDir, dataDir, hub, spawnFn = spawn, now = 
       let malformedLines = 0;
       let settled = null;
 
+      // Folded onto the history record so History and the cost estimate can be
+      // answered from runs.jsonl alone, without replaying every event file.
+      let summary;
+      let story;
+      let usage;
+
       const publish = (event) => {
         const sequenced = hub.publish(runId, event);
         eventsFile.write(JSON.stringify(sequenced) + '\n');
@@ -62,8 +69,12 @@ export function createRunner({ projectDir, dataDir, hub, spawnFn = spawn, now = 
       const consume = (lines) => {
         for (const line of lines) {
           const event = parseEvent(line);
-          if (event) publish(event);
-          else malformedLines++;   // never fatal: one bad line must not end a run
+          if (!event) { malformedLines++; continue; }   // never fatal: one bad line must not end a run
+
+          publish(event);
+          if (event.t === 'summary') summary = event.summary;
+          if (event.t === 'story:done') story = { date: event.date, pages: event.pages };
+          if (event.t === 'claude:usage') usage = addUsage(usage || {}, event);
         }
       };
       child.stdio[3]?.on('data', chunk => consume(progressDecoder.push(chunk)));
@@ -101,17 +112,24 @@ export function createRunner({ projectDir, dataDir, hub, spawnFn = spawn, now = 
           endedAt,
           durationMs: endedAt - startedAt,
           malformedLines,
-          stderr: stderrTail.join('\n')
+          stderr: stderrTail.join('\n'),
+          ...(summary !== undefined && { summary }),
+          ...(story !== undefined && { story }),
+          ...(usage !== undefined && { usage })
         };
 
         publish({ t: 'run:end', runId, ok: status === 'ok', ...record, at: endedAt });
         appendRecord(dataDir, record);
-        eventsFile.end();
 
         if (active?.killTimer) clearTimeout(active.killTimer);
         active = null;                 // the lock releases here, on every path
-        settled = record;
-        for (const resolve of pending.splice(0)) resolve(record);
+
+        // Waiters are told the run is over only once its event file is flushed,
+        // so a replay read straight after waitForExit sees every event.
+        eventsFile.end(() => {
+          settled = record;
+          for (const resolve of pending.splice(0)) resolve(record);
+        });
       };
 
       // 'close' rather than 'exit': exit can fire while stdout and fd 3 still

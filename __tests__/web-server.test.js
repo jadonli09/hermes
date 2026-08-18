@@ -5,7 +5,7 @@ import path from 'path';
 import { createEventHub } from '../web/events.js';
 import { createServer } from '../web/server.js';
 
-let dir, hub, server, base, fakeRunner, started;
+let dir, hub, server, base, fakeRunner, started, apifyCalls, apifyResponse;
 
 const fixtureAccounts = {
   categories: { clubs: { enabled: true, accounts: ['msjbio'] } },
@@ -39,7 +39,15 @@ beforeEach(async () => {
     getActive() { return this.active; }
   };
 
-  server = createServer({ projectDir: dir, dataDir: dir, storyDir: dir, runner: fakeRunner, hub });
+  apifyCalls = [];
+  apifyResponse = { ok: true, status: 200, json: async () => ({ data: {
+    monthlyUsageCycle: { startAt: '2026-08-01T00:00:00.000Z', endAt: '2026-09-01T00:00:00.000Z' },
+    limits: { maxMonthlyUsageUsd: 49 },
+    current: { monthlyUsageUsd: 5.5 }
+  } }) };
+  const apifyFetch = async (url, options) => { apifyCalls.push({ url, options }); return apifyResponse; };
+
+  server = createServer({ projectDir: dir, dataDir: dir, storyDir: dir, runner: fakeRunner, hub, apifyFetch });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${server.address().port}`;
 });
@@ -207,5 +215,79 @@ describe('the web server', () => {
       body: 'not json'
     });
     expect(response.status).toBe(400);
+  });
+});
+
+describe('GET /api/usage', () => {
+  const day = 24 * 60 * 60 * 1000;
+  const haiku = (inputTokens) => ({ 'claude-haiku-4-5': { calls: 1, inputTokens, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 } });
+
+  it('estimates Claude spend from recorded runs, this month and all time', async () => {
+    const now = Date.now();
+    const monthStart = new Date(new Date(now).getFullYear(), new Date(now).getMonth(), 1).getTime();
+    const lines = [
+      { id: 'old', kind: 'scrape', status: 'ok', startedAt: monthStart - 40 * day, usage: haiku(1_000_000) },
+      { id: 'new', kind: 'scrape', status: 'ok', startedAt: monthStart + 1, usage: haiku(2_000_000) }
+    ];
+    fs.writeFileSync(path.join(dir, 'runs.jsonl'), lines.map(l => JSON.stringify(l)).join('\n') + '\n');
+
+    const body = await (await fetch(`${base}/api/usage`)).json();
+
+    expect(body.claude.allTime.usd).toBeCloseTo(3, 6);
+    expect(body.claude.allTime.runs).toBe(2);
+    expect(body.claude.sinceCutoff.usd).toBeCloseTo(2, 6);
+    expect(body.claude.sinceCutoff.runs).toBe(1);
+    expect(body.claude.since).toBe(monthStart);
+  });
+
+  it('reports Apify month-to-date spend using the token from .env, and caches it', async () => {
+    const first = await (await fetch(`${base}/api/usage`)).json();
+    const second = await (await fetch(`${base}/api/usage`)).json();
+
+    expect(first.apify).toEqual({
+      ok: true, usedUsd: 5.5, limitUsd: 49,
+      cycleStart: '2026-08-01T00:00:00.000Z', cycleEnd: '2026-09-01T00:00:00.000Z'
+    });
+    expect(second.apify).toEqual(first.apify);
+    expect(apifyCalls).toHaveLength(1);
+    expect(apifyCalls[0].options.headers.Authorization).toBe('Bearer topsecretvalue');
+  });
+
+  it('still answers the Claude half when Apify is unavailable', async () => {
+    apifyResponse = { ok: false, status: 503, json: async () => ({}) };
+
+    const response = await fetch(`${base}/api/usage`);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.apify.ok).toBe(false);
+    expect(body.claude.allTime.runs).toBe(0);
+  });
+
+  it('never echoes the Apify token', async () => {
+    const text = await (await fetch(`${base}/api/usage`)).text();
+    expect(text).not.toContain('topsecretvalue');
+  });
+});
+
+describe('brand fonts', () => {
+  it('serves the story fonts so the dashboard matches the graphic', async () => {
+    fs.mkdirSync(path.join(dir, 'assets', 'fonts'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'assets', 'fonts', 'Satoshi-Variable.woff2'), 'woff2-bytes');
+
+    const response = await fetch(`${base}/fonts/Satoshi-Variable.woff2`);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('font/woff2');
+    expect(await response.text()).toBe('woff2-bytes');
+  });
+
+  it('only serves woff2 files by plain name', async () => {
+    fs.mkdirSync(path.join(dir, 'assets', 'fonts'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'assets', 'fonts', 'Satoshi-Variable.woff2'), 'x');
+
+    expect((await fetch(`${base}/fonts/..%2F..%2F.env`)).status).toBe(404);
+    expect((await fetch(`${base}/fonts/missing.woff2`)).status).toBe(404);
+    expect((await fetch(`${base}/fonts/Satoshi-Variable.ttf`)).status).toBe(404);
   });
 });

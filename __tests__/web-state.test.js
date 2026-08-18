@@ -127,3 +127,56 @@ describe('reduce', () => {
     expect(JSON.stringify(before)).toBe(snapshot);
   });
 });
+
+describe('claude usage', () => {
+  it('starts with no usage recorded', () => {
+    expect(initialState().usage).toEqual({});
+  });
+
+  it('accumulates token buckets per model as calls are reported', () => {
+    const state = run(
+      { t: 'run:start', runId: 'r1', kind: 'scrape', seq: 1 },
+      { t: 'claude:usage', model: 'claude-haiku-4-5', inputTokens: 100, outputTokens: 10, cacheReadTokens: 0, cacheWriteTokens: 0, seq: 2 },
+      { t: 'claude:usage', model: 'claude-haiku-4-5', inputTokens: 50, outputTokens: 5, cacheReadTokens: 8, cacheWriteTokens: 0, seq: 3 },
+      { t: 'claude:usage', model: 'claude-sonnet-5', inputTokens: 900, outputTokens: 90, cacheReadTokens: 0, cacheWriteTokens: 0, seq: 4 }
+    );
+
+    expect(state.usage).toEqual({
+      'claude-haiku-4-5': { calls: 2, inputTokens: 150, outputTokens: 15, cacheReadTokens: 8, cacheWriteTokens: 0 },
+      'claude-sonnet-5':  { calls: 1, inputTokens: 900, outputTokens: 90, cacheReadTokens: 0, cacheWriteTokens: 0 }
+    });
+  });
+
+  it('resets usage when a new run starts', () => {
+    const state = run(
+      { t: 'run:start', runId: 'r1', kind: 'scrape', seq: 1 },
+      { t: 'claude:usage', model: 'claude-haiku-4-5', inputTokens: 100, outputTokens: 10, seq: 2 },
+      { t: 'run:start', runId: 'r2', kind: 'scrape', seq: 3 }
+    );
+    expect(state.usage).toEqual({});
+  });
+});
+
+describe('roll call', () => {
+  it('remembers which account positions succeeded and which failed', () => {
+    const state = run(
+      { t: 'run:start', runId: 'r1', kind: 'scrape', seq: 1 },
+      { t: 'club:done', index: 1, total: 3, account: 'a', postsFound: 1, eventsExtracted: 0, seq: 2 },
+      { t: 'club:error', index: 2, total: 3, account: 'b', message: 'boom', seq: 3 },
+      { t: 'club:start', index: 3, total: 3, account: 'c', seq: 4 }
+    );
+
+    expect(state.rollcall).toEqual({ 1: 'done', 2: 'error' });
+    expect(state.current).toBe('c');
+  });
+
+  it('starts empty and clears on a new run', () => {
+    expect(initialState().rollcall).toEqual({});
+    const state = run(
+      { t: 'run:start', runId: 'r1', kind: 'scrape', seq: 1 },
+      { t: 'club:done', index: 1, total: 1, account: 'a', seq: 2 },
+      { t: 'run:start', runId: 'r2', kind: 'scrape', seq: 3 }
+    );
+    expect(state.rollcall).toEqual({});
+  });
+});

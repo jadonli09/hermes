@@ -164,3 +164,28 @@ describe('createRunner', () => {
     expect(lines.every(e => typeof e.seq === 'number')).toBe(true);
   });
 });
+
+describe('history record folding', () => {
+  it('keeps the summary, story result, and Claude usage on the run record', async () => {
+    const { runId } = runner.start({ kind: 'scrape', script: 'child-usage.js' });
+    await runner.waitForExit(runId);
+
+    const [record] = readRuns(dataDir);
+    expect(record.summary).toEqual({ clubsProcessed: 2, totalPostsScraped: 5, totalNewPostsAdded: 3 });
+    expect(record.story).toEqual({ date: '2026-08-17', pages: 2 });
+    expect(record.usage).toEqual({
+      'claude-haiku-4-5': { calls: 2, inputTokens: 150, outputTokens: 15, cacheReadTokens: 7, cacheWriteTokens: 0 },
+      'claude-sonnet-5':  { calls: 1, inputTokens: 900, outputTokens: 90, cacheReadTokens: 0, cacheWriteTokens: 0 }
+    });
+  });
+
+  it('leaves those fields absent for a run that never reported them', async () => {
+    const { runId } = runner.start({ kind: 'scrape', script: 'child-crash.js' });
+    await runner.waitForExit(runId);
+
+    const [record] = readRuns(dataDir);
+    expect(record.summary).toBeUndefined();
+    expect(record.story).toBeUndefined();
+    expect(record.usage).toBeUndefined();
+  });
+});

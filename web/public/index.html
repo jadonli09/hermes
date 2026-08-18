@@ -7,36 +7,47 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <header>
-    <h1>Hermes</h1>
-    <nav id="tabs">
-      <button data-tab="run" class="active">Run</button>
+  <header class="masthead">
+    <div class="masthead-inner">
+    <div class="brand">
+      <span class="eyebrow">MSJ Clubs · Dashboard</span>
+      <h1>Hermes</h1>
+    </div>
+    <nav id="tabs" aria-label="Sections">
+      <button data-tab="run" class="active" aria-current="page">Run</button>
       <button data-tab="history">History</button>
       <button data-tab="story">Story</button>
       <button data-tab="settings">Settings</button>
     </nav>
+    </div>
   </header>
 
   <main>
-    <section id="tab-run" class="tab active">
+    <section id="tab-run" class="tab active" aria-labelledby="run-heading">
+      <div class="section-head">
+        <h2 id="run-heading">Scrape</h2>
+        <p class="lede">Pulls new posts from every tracked account, extracts events with Claude, and writes them to the sheet.</p>
+      </div>
+
       <div class="actions">
         <button id="start-run" class="primary">Run scrape</button>
-        <button id="cancel-run" hidden>Cancel</button>
+        <button id="cancel-run" class="ghost" hidden>Cancel</button>
         <span id="run-status" class="status">idle</span>
+        <span id="progress-label" class="phase">No run yet</span>
       </div>
 
-      <div class="bar"><div id="progress" class="fill"></div></div>
-      <p id="progress-label">No run yet</p>
+      <div id="rollcall" class="rollcall" role="img" aria-label="Accounts processed"></div>
 
       <div class="tiles">
-        <div class="tile"><span id="stat-clubs">0/0</span><label>Clubs</label></div>
-        <div class="tile"><span id="stat-posts">0</span><label>Posts found</label></div>
-        <div class="tile"><span id="stat-events">0</span><label>Events extracted</label></div>
-        <div class="tile"><span id="stat-errors">0</span><label>Errors</label></div>
+        <div class="tile"><label>Accounts</label><span id="stat-clubs">0/0</span></div>
+        <div class="tile"><label>Posts found</label><span id="stat-posts">0</span></div>
+        <div class="tile"><label>Events extracted</label><span id="stat-events">0</span></div>
+        <div class="tile"><label>Errors</label><span id="stat-errors">0</span></div>
+        <div class="tile"><label>Claude, est.</label><span id="stat-cost">—</span></div>
       </div>
 
-      <div id="summary-card" hidden></div>
-      <ul id="error-list"></ul>
+      <div id="summary-card" class="card" hidden></div>
+      <ul id="error-list" class="errors"></ul>
 
       <details id="log-panel">
         <summary>Log</summary>
@@ -44,22 +55,34 @@
       </details>
     </section>
 
-    <section id="tab-history" class="tab">
-      <table id="history-table"></table>
+    <section id="tab-history" class="tab" aria-labelledby="history-heading">
+      <div class="section-head">
+        <h2 id="history-heading">History</h2>
+        <p class="lede">Every run started from here. Select a row to replay it in the Scrape view.</p>
+      </div>
+      <div class="table-wrap"><table id="history-table"></table></div>
     </section>
 
-    <section id="tab-story" class="tab">
+    <section id="tab-story" class="tab" aria-labelledby="story-heading">
+      <div class="section-head">
+        <h2 id="story-heading">Daily story</h2>
+        <p class="lede">The 9:16 "what's on today" graphic for @msjclubs. Generate it, check it, download it.</p>
+      </div>
       <div class="actions">
-        <input type="date" id="story-date">
+        <input type="date" id="story-date" aria-label="Story date">
         <button id="generate-story" class="primary">Generate story</button>
         <span id="story-status" class="status"></span>
       </div>
-      <div id="story-pages"></div>
+      <div id="story-pages" class="pages"></div>
     </section>
 
-    <section id="tab-settings" class="tab">
+    <section id="tab-settings" class="tab" aria-labelledby="settings-heading">
+      <div class="section-head">
+        <h2 id="settings-heading">Settings</h2>
+        <p class="lede">Which accounts are tracked, how far back a scrape looks, and what the two paid services have used.</p>
+      </div>
       <div id="settings-form"></div>
-      <p id="settings-status" class="status"></p>
+      <p id="settings-status" class="status" role="status"></p>
     </section>
   </main>
 

@@ -184,6 +184,19 @@ Run data lives in `.hermes/` (gitignored): `runs.jsonl` for summaries and
 run be replayed in the UI. A run whose server was killed mid-flight shows as
 `interrupted` rather than stuck at `running`.
 
+**Spend.** Settings shows what the two paid services have used:
+
+- *Apify* is live from Apify's own limits endpoint (month-to-date against the plan
+  cap), fetched server-side with the token from `.env` and cached for a minute.
+- *Claude* is an **estimate**: every Claude call the pipeline makes reports its
+  token counts (`claude:usage`), the run record keeps a per-model ledger, and the
+  dashboard prices it at list rates (`web/public/pricing.js`). It only knows about
+  runs started from the dashboard, and Anthropic exposes no balance endpoint to
+  individual accounts, so the prepaid balance itself is only in the Console.
+
+The dashboard is set in the same faces as the story graphic (`assets/fonts`), served
+at `/fonts/*.woff2`.
+
 **It binds `127.0.0.1` only and has no authentication.** It can spend Apify and
 Claude credits, so do not expose it to a network without adding auth first. Secrets
 stay in `.env` — the web layer reports only whether each one is set, and refuses to
