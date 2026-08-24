@@ -14,8 +14,9 @@ const COL = {
 };
 
 // Kept in step with CalendarSync.gs so the story and the calendar never disagree
-// about what counts as an event.
-const EXCLUDED_TYPES = ['announcement'];
+// about what counts as an event. "Recap" is set from the dashboard's Review tab
+// for posts about something that already happened.
+const EXCLUDED_TYPES = ['announcement', 'recap'];
 const MIN_CONFIDENCE = 0.3;
 
 /**

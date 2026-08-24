@@ -168,7 +168,18 @@ npm run web        # http://127.0.0.1:4317
 ```
 
 Start a scrape and watch it live, browse past runs, generate and preview the daily
-story, and edit tracked accounts — without the terminal.
+story, review extractions that need a human, and edit tracked accounts — without
+the terminal.
+
+**Review.** The Review tab lists upcoming events whose extraction confidence came
+in under 0.7 or that are missing a date, time, or location. Fill in the blanks and
+save; edits write straight back to the sheet, and a saved row is stamped
+confidence 1.0 since a person has now verified it. Past events are left alone —
+their story has already gone out. **Mark as recap** sets the row's event type to
+`Recap`, an excluded type everywhere (story, calendar sync, and the review queue
+itself) — use it when a post is about something that already happened. If you
+change the exclusion list, update `story/event-source.js`, `web/review.js`, and
+`google-apps-script/CalendarSync.gs` together, and re-paste the Apps Script.
 
 The dashboard drives the same CLI entry points as subprocesses; it does not
 reimplement the pipeline. `npm start` and `npm run story` behave identically whether
@@ -243,6 +254,17 @@ The application will:
    - Process each post with Claude AI to extract meeting information
 6. Update or append results to Google Sheets
 7. Sort the spreadsheet by meeting date
+
+### Introduction story
+
+```bash
+npm run story:intro                  # into STORY_OUT_DIR
+npm run story:intro -- --out=./out   # or somewhere else
+```
+
+Renders `story-intro.png`, a one-time "Meet Hermes" page in the same visual system
+as the daily story: what Hermes is, plus sample rows showing what the daily
+graphic looks like. `story/intro.js` holds the copy.
 
 ### Resume Mode
 

@@ -2,7 +2,7 @@
  * Google Apps Script: Sync Spreadsheet Events to Google Calendar
  *
  * Creates ONE all-day event per date containing all club events in the description.
- * Excludes Announcements - only includes Fundraisers, Club Meetings, Workshops, Social Events, etc.
+ * Excludes Announcements and Recaps - only includes Fundraisers, Club Meetings, Workshops, Social Events, etc.
  *
  * SETUP INSTRUCTIONS:
  * 1. Open your Google Spreadsheet
@@ -33,7 +33,9 @@ const CONFIG = {
   // Event types to EXCLUDE from calendar (case-insensitive)
   // All other types will be included: Club Meeting, Fundraiser, Volunteer, Social Event,
   // Competition, Workshop, Game, Tryout, Dance, Assembly, Election, Activity, Spirit Day, Event, Other
-  EXCLUDED_TYPES: ['announcement'],
+  // "Recap" is set from the Hermes dashboard's Review tab for posts about
+  // something that already happened. Kept in step with story/event-source.js.
+  EXCLUDED_TYPES: ['announcement', 'recap'],
 
   // Title for the daily all-day event
   DAILY_EVENT_TITLE: 'Hermes',

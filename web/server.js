@@ -10,6 +10,7 @@ import { backfillRuns, readRuns, runEventsPath } from './history.js';
 import { readSecret, readSettings, writeSettings } from './settings.js';
 import { fetchApifyUsage } from './apify-usage.js';
 import { summarizeRuns } from './usage.js';
+import { listReviewEvents, applyReviewUpdate, validateReviewUpdate, markAsRecap, validateRowIndex } from './review.js';
 
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'public');
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -110,8 +111,34 @@ function startRun(res, runner, options) {
   }
 }
 
-export function createServer({ projectDir, dataDir, storyDir, runner, hub, apifyFetch = globalThis.fetch }) {
+export function createServer({ projectDir, dataDir, storyDir, runner, hub, apifyFetch = globalThis.fetch, sheetsClient = null }) {
   let apifyCache = null;   // { at, value }
+  let sheetsPromise = null;
+
+  // Lazy and injectable: tests pass a fake, and a dashboard used only for runs
+  // never authenticates against Google at all.
+  function getSheets() {
+    if (sheetsClient) return Promise.resolve(sheetsClient);
+    if (!sheetsPromise) {
+      sheetsPromise = (async () => {
+        const [{ authenticateSheets }, { getCredentialsPath }] = await Promise.all([
+          import('../sheets-writer.js'),
+          import('../config-manager.js')
+        ]);
+        return authenticateSheets(getCredentialsPath(projectDir));
+      })().catch(error => {
+        sheetsPromise = null;   // a failed auth is retried on the next request
+        throw error;
+      });
+    }
+    return sheetsPromise;
+  }
+
+  function spreadsheetId() {
+    const id = readSecret(projectDir, 'GOOGLE_SPREADSHEET_ID');
+    if (!id) throw new Error('GOOGLE_SPREADSHEET_ID is not set in .env');
+    return id;
+  }
 
   async function apifyUsage() {
     if (apifyCache && Date.now() - apifyCache.at < APIFY_CACHE_MS) return apifyCache.value;
@@ -202,6 +229,40 @@ export function createServer({ projectDir, dataDir, storyDir, runner, hub, apify
           claude: summarizeRuns(runs, { since: monthStart }),
           apify: await apifyUsage()
         });
+      }
+
+      if (route === 'GET /api/review') {
+        // Local date, matching story.js: "today" is the school's today
+        const today = new Date().toLocaleDateString('en-CA');
+        const events = await listReviewEvents(await getSheets(), spreadsheetId(), today);
+        return sendJson(res, 200, { events });
+      }
+
+      if (route === 'PUT /api/review') {
+        const { rowIndex, fields } = await readBody(req);
+
+        // Bad input is the caller's fault (400); a Sheets failure after
+        // validation falls through to the generic 500 below.
+        try {
+          validateReviewUpdate(rowIndex, fields);
+        } catch (error) {
+          return sendJson(res, 400, { error: error.message });
+        }
+
+        const result = await applyReviewUpdate(await getSheets(), spreadsheetId(), rowIndex, fields);
+        return sendJson(res, 200, result);
+      }
+
+      if (route === 'POST /api/review/recap') {
+        const { rowIndex } = await readBody(req);
+
+        try {
+          validateRowIndex(rowIndex);
+        } catch (error) {
+          return sendJson(res, 400, { error: error.message });
+        }
+
+        return sendJson(res, 200, await markAsRecap(await getSheets(), spreadsheetId(), rowIndex));
       }
 
       if (route === 'GET /api/settings') {

@@ -1,7 +1,8 @@
 import { timeRank, sortEvents, paginate, scaleFor, groupByTime, MAX_PER_PAGE } from '../story/paginate.js';
 import { isPublishable, eventsOnDate } from '../story/event-source.js';
 import { monogram } from '../story/avatars.js';
-import { escapeHtml, formatHeading, densityFor, buildPage } from '../story/template.js';
+import { escapeHtml, formatHeading, densityFor, buildPage, normalizeLocation } from '../story/template.js';
+import { buildIntroPage } from '../story/intro.js';
 
 const ev = (over = {}) => ({
   club_name: 'msjbio', event_date: '02/10/2026', event_time: 'Lunch',
@@ -121,6 +122,11 @@ describe('isPublishable', () => {
     expect(isPublishable(ev({ event_type: 'announcement' }))).toBe(false);
   });
 
+  it('drops recaps marked from the review tab', () => {
+    expect(isPublishable(ev({ event_type: 'Recap' }))).toBe(false);
+    expect(isPublishable(ev({ event_type: 'recap' }))).toBe(false);
+  });
+
   it('drops low-confidence extractions', () => {
     expect(isPublishable(ev({ confidence: '0.2' }))).toBe(false);
     expect(isPublishable(ev({ confidence: '0.3' }))).toBe(true);
@@ -215,6 +221,83 @@ describe('densityFor', () => {
 
   it('never drops below two lines, so a description is never a single fragment', () => {
     for (let n = 1; n <= 12; n++) expect(densityFor(n).descLines).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('normalizeLocation', () => {
+  // The bug this fixes: one club's chip read "Room C12" next to others reading
+  // "B21" and "B18", so the story looked inconsistent
+  it('strips a Room prefix down to the bare code', () => {
+    expect(normalizeLocation('Room C12')).toBe('C12');
+    expect(normalizeLocation('room b21')).toBe('B21');
+    expect(normalizeLocation('Rm. E2A')).toBe('E2A');
+    expect(normalizeLocation('Rm 34')).toBe('34');
+    expect(normalizeLocation('Room: P23')).toBe('P23');
+  });
+
+  it('leaves bare codes and named places alone', () => {
+    expect(normalizeLocation('C12')).toBe('C12');
+    expect(normalizeLocation('Band Room')).toBe('Band Room');
+    expect(normalizeLocation('Room of Requirement')).toBe('Room of Requirement');
+    expect(normalizeLocation('Library')).toBe('Library');
+  });
+
+  it('handles empty input', () => {
+    expect(normalizeLocation('')).toBe('');
+    expect(normalizeLocation(null)).toBe('');
+    expect(normalizeLocation(undefined)).toBe('');
+  });
+
+  it('trims whitespace either way', () => {
+    expect(normalizeLocation('  Room C12  ')).toBe('C12');
+    expect(normalizeLocation('  B17  ')).toBe('B17');
+  });
+});
+
+describe('buildPage location normalization', () => {
+  const html = (location, count = 1) => buildPage({
+    isoDate: '2026-08-24',
+    events: Array.from({ length: count }, (_, i) => ev({ club_name: `msjclub${i}`, location })),
+    page: 1, totalPages: 1, totalEvents: count
+  });
+
+  it('renders "Room C12" from the sheet as a bare C12 chip', () => {
+    const out = html('Room C12');
+    expect(out).toContain('>C12<');
+    expect(out).not.toContain('Room C12');
+  });
+
+  it('normalizes on busy pages too, where the chip sits beside the text', () => {
+    const out = html('Room C12', 5);
+    expect(out).toContain('>C12<');
+    expect(out).not.toContain('Room C12');
+  });
+});
+
+describe('buildIntroPage', () => {
+  const out = buildIntroPage();
+
+  it('introduces Hermes in the daily story format', () => {
+    expect(out).toContain('Meet<br>Hermes');
+    expect(out).toContain('@MSJCLUBS');
+    expect(out).toContain('What it looks like');
+  });
+
+  it('shows sample rows with bare room codes, matching the daily story', () => {
+    expect(out).toContain('>B21<');
+    expect(out).toContain('>C12<');
+    expect(out).not.toMatch(/Room [A-Z]\d/);
+  });
+
+  it('contains no em dashes anywhere in the copy', () => {
+    expect(out).not.toContain('—');
+    expect(out).not.toContain('&mdash;');
+  });
+
+  it('is a complete standalone document at story dimensions', () => {
+    expect(out).toContain('<!doctype html>');
+    expect(out).toContain('width:1080px');
+    expect(out).toContain('height:1920px');
   });
 });
 

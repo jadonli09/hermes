@@ -36,6 +36,7 @@ for (const button of document.querySelectorAll('#tabs button')) {
     $(`tab-${button.dataset.tab}`).classList.add('active');
 
     if (button.dataset.tab === 'history') loadHistory();
+    if (button.dataset.tab === 'review') loadReview();
     if (button.dataset.tab === 'settings') loadSettings();
   });
 }
@@ -280,6 +281,119 @@ $('generate-story').addEventListener('click', async () => {
     $('generate-story').disabled = false;
   }
 });
+
+// ---- review tab
+
+// The date input wants YYYY-MM-DD; the sheet stores MM/DD/YYYY
+const toIsoDate = (value) => {
+  const match = String(value || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  return match ? `${match[3]}-${match[1].padStart(2, '0')}-${match[2].padStart(2, '0')}` : (value || '');
+};
+
+async function loadReview() {
+  const list = $('review-list');
+  $('review-status').textContent = 'loading';
+  $('review-status').className = 'status running';
+
+  try {
+    const { events } = await api('/api/review');
+    $('review-status').textContent = events.length ? `${events.length} to review` : '';
+    $('review-status').className = 'status';
+    paintReview(events);
+  } catch (error) {
+    $('review-status').textContent = error.message;
+    $('review-status').className = 'status failed';
+    list.innerHTML = '';
+  }
+}
+
+function paintReview(events) {
+  const list = $('review-list');
+
+  if (events.length === 0) {
+    list.innerHTML = '<p class="status">Nothing needs a look. Every upcoming event has a date, a time, a location, and solid confidence.</p>';
+    return;
+  }
+
+  list.innerHTML = events.map(event => `
+    <div class="review-card" data-row="${event.rowIndex}">
+      <div class="review-head">
+        <span class="review-club">@${escape(event.club_name || 'unknown')}</span>
+        <span class="review-issues">${event.issues.map(issue => `<span class="pill issue">${escape(issue)}</span>`).join('')}</span>
+      </div>
+      ${event.description ? `<p class="review-desc">${escape(event.description)}</p>` : ''}
+      <p class="review-meta">
+        ${event.event_type ? `${escape(event.event_type)} · ` : ''}confidence ${escape(event.confidence || 'not recorded')}
+        ${event.post_url ? ` · <a href="${escape(event.post_url)}" target="_blank" rel="noopener">open the post</a>` : ''}
+      </p>
+      <div class="review-fields">
+        <label>Date <input type="date" data-field="event_date" value="${escape(toIsoDate(event.event_date))}"></label>
+        <label>Time <input type="text" data-field="event_time" value="${escape(event.event_time)}" placeholder="Lunch, After School, 3:30 PM"></label>
+        <label>Location <input type="text" data-field="location" value="${escape(event.location)}" placeholder="C12"></label>
+        <button class="primary" data-save="${event.rowIndex}">Save</button>
+        <button class="ghost" data-recap="${event.rowIndex}" title="Not an event: the post recaps something that already happened">Mark as recap</button>
+        <span class="status" data-status="${event.rowIndex}"></span>
+      </div>
+    </div>`).join('');
+
+  for (const button of list.querySelectorAll('[data-save]')) {
+    button.addEventListener('click', () => saveReview(button.dataset.save));
+  }
+  for (const button of list.querySelectorAll('[data-recap]')) {
+    button.addEventListener('click', () => recapReview(button.dataset.recap));
+  }
+}
+
+async function recapReview(rowIndex) {
+  const card = $('review-list').querySelector(`.review-card[data-row="${rowIndex}"]`);
+  const status = card.querySelector(`[data-status="${rowIndex}"]`);
+
+  try {
+    status.textContent = 'marking';
+    status.className = 'status running';
+    await api('/api/review/recap', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ rowIndex: Number(rowIndex) })
+    });
+    status.textContent = 'marked as recap';
+    status.className = 'status ok';
+    // A recap is excluded from the queue, so the card disappears on reload
+    setTimeout(loadReview, 600);
+  } catch (error) {
+    status.textContent = error.message;
+    status.className = 'status failed';
+  }
+}
+
+async function saveReview(rowIndex) {
+  const card = $('review-list').querySelector(`.review-card[data-row="${rowIndex}"]`);
+  const status = card.querySelector(`[data-status="${rowIndex}"]`);
+
+  const fields = {};
+  for (const input of card.querySelectorAll('[data-field]')) {
+    if (input.value.trim() !== '') fields[input.dataset.field] = input.value.trim();
+  }
+
+  try {
+    status.textContent = 'saving';
+    status.className = 'status running';
+    await api('/api/review', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ rowIndex: Number(rowIndex), fields })
+    });
+    status.textContent = 'saved';
+    status.className = 'status ok';
+    // Reload so a fully repaired row leaves the list rather than lingering
+    setTimeout(loadReview, 600);
+  } catch (error) {
+    status.textContent = error.message;
+    status.className = 'status failed';
+  }
+}
+
+$('refresh-review').addEventListener('click', loadReview);
 
 // ---- settings tab
 

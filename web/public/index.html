@@ -21,6 +21,7 @@
       <button data-tab="run" class="active" aria-current="page">Run</button>
       <button data-tab="history">History</button>
       <button data-tab="story">Story</button>
+      <button data-tab="review">Review</button>
       <button data-tab="settings">Settings</button>
     </nav>
     </div>
@@ -78,6 +79,18 @@
         <span id="story-status" class="status"></span>
       </div>
       <div id="story-pages" class="pages"></div>
+    </section>
+
+    <section id="tab-review" class="tab" aria-labelledby="review-heading">
+      <div class="section-head">
+        <h2 id="review-heading">Needs a look</h2>
+        <p class="lede">Upcoming events Claude was unsure about or could not fully read. Fill in what is missing and save; saved rows are marked verified.</p>
+      </div>
+      <div class="actions">
+        <button id="refresh-review" class="ghost">Refresh</button>
+        <span id="review-status" class="status" role="status"></span>
+      </div>
+      <div id="review-list" class="review-list"></div>
     </section>
 
     <section id="tab-settings" class="tab" aria-labelledby="settings-heading">

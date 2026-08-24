@@ -304,6 +304,32 @@ td.empty { color: var(--muted); padding: 28px 14px; text-align: center; }
 .pages a:hover { text-decoration: underline; }
 .pages .status { text-transform: none; letter-spacing: 0; font-family: var(--ui); font-size: 14px; }
 
+/* ---- review --------------------------------------------------------- */
+
+.review-list { display: grid; gap: 14px; }
+.review-card {
+  background: var(--ink-1); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 16px 18px;
+}
+.review-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.review-club { font: 600 15px/1.3 var(--mono); letter-spacing: -0.01em; }
+.review-issues { display: flex; gap: 6px; flex-wrap: wrap; }
+.pill.issue { color: var(--ochre); background: var(--ochre-wash); border-color: rgba(212,165,90,0.35); }
+.review-desc { margin: 8px 0 0; color: var(--bone-2); font-size: 14px; }
+.review-meta { margin: 6px 0 0; color: var(--muted); font-size: 12.5px; }
+.review-meta a { color: var(--sage); }
+.review-fields {
+  display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap;
+  margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line);
+}
+.review-fields label {
+  display: flex; flex-direction: column; gap: 6px;
+  font: 500 10.5px/1 var(--mono); letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--muted);
+}
+.review-fields input { min-width: 150px; }
+.review-fields button { padding: 9px 16px; }
+
 /* ---- settings ------------------------------------------------------- */
 
 .settings-grid { display: grid; gap: 18px; }
