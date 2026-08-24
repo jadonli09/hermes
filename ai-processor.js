@@ -278,6 +278,9 @@ EVENT TYPE (event_type):
 
 LOCATION:
 - Extract: Room numbers (B17, C13, E2A, P23, M3, etc.), building names, or named areas
+- Room numbers: return the BARE CODE only, never the word "Room"/"Rm"
+  * "Room C12" → "C12", "Rm. B21" → "B21", "in room E2A" → "E2A"
+  * Named places keep their full name: "Band Room" stays "Band Room"
 - Common locations: "Horseshoe", "BTQ", "Cafeteria", "Library", "Gym", "Auditorium"
 - Patterns: [Letter][Number], [Letter][Number][Letter], or full building names
 - Check both image OCR and caption
@@ -560,6 +563,7 @@ RULES:
 - Create ONE entry per UNIQUE day with a distinct theme or activity
 - event_type should be "Spirit Day" for dress-up themes, "Activity" for lunch activities, "Event" for other
 - description should include the theme (e.g., "Pajama Day", "Twin Day", "Jersey Day")
+- location: return bare room codes only ("C12", never "Room C12")
 - If a day's date is unclear, infer from sequence (Monday, Tuesday, etc.)
 
 IGNORE these slide types (do NOT create entries for them):

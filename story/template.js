@@ -53,6 +53,23 @@ export function densityFor(count) {
 }
 
 /**
+ * Locations render as bare room codes: "C12", never "Room C12". The extraction
+ * prompt asks for the code alone, but rows written before that rule (and the
+ * odd slip) still carry a prefix, so it is stripped again at render time.
+ *
+ * Only a prefix followed by a plain code is stripped - "Band Room" and
+ * "Room of Requirement" pass through untouched.
+ *
+ * @param {string} location
+ * @returns {string}
+ */
+export function normalizeLocation(location) {
+  const text = String(location || '').trim();
+  const match = text.match(/^(?:room|rm\.?)[:\s]\s*([a-z]?\d+[a-z]?)$/i);
+  return match ? match[1].toUpperCase() : text;
+}
+
+/**
  * Shortens a location to fit the room chip.
  *
  * Locations are usually codes (B17, A-Wing) but Claude sometimes extracts a
@@ -182,15 +199,18 @@ body{width:${WIDTH}px;height:${HEIGHT}px;overflow:hidden;background:${C.sage600}
   <div class="body">
 ${groups.map(group => `    <div class="grp">
       <div class="grp-h"><span class="grp-t">${escapeHtml(group.time)}</span><span class="grp-rule"></span></div>
-${group.events.map(e => `      <div class="ev">
+${group.events.map(e => {
+      const location = normalizeLocation(e.location);
+      return `      <div class="ev">
         ${avatarMarkup(e.club_name)}
         <div class="ev-main">
           <div class="ev-club">@${escapeHtml(e.club_name)}</div>
           ${e.description ? `<div class="ev-desc">${escapeHtml(e.description)}</div>` : ''}
-          ${e.location && stackLocation ? `<div class="ev-room below">${escapeHtml(e.location)}</div>` : ''}
+          ${location && stackLocation ? `<div class="ev-room below">${escapeHtml(location)}</div>` : ''}
         </div>
-        ${e.location && !stackLocation ? `<div class="ev-room beside">${escapeHtml(shortLocation(e.location, s, locationMax))}</div>` : ''}
-      </div>`).join('\n')}
+        ${location && !stackLocation ? `<div class="ev-room beside">${escapeHtml(shortLocation(location, s, locationMax))}</div>` : ''}
+      </div>`;
+    }).join('\n')}
     </div>`).join('\n')}
   </div>
   <div class="ft"><span>@MSJCLUBS</span><span>${page} / ${totalPages}</span></div>
