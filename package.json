@@ -12,6 +12,7 @@
     "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --coverage",
     "verify:handles": "node verify-handles.js",
     "story": "node story.js",
+    "story:intro": "node story-intro.js",
     "avatars": "node refresh-avatars.js",
     "logo": "node render-logo.js"
   },
