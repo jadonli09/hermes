@@ -1,8 +1,8 @@
 {
-  "_source": "Club_Description_2026-27.pdf (80 clubs) is authoritative for which clubs are official this year. Instagram handles are NOT recorded in any ASB document - the ones below were matched by club name against the previous list. See pendingHandles for clubs still missing a handle.",
+  "_source": "MSJ Club Directory 2026-27.xlsx (87 clubs) is authoritative for which clubs are official this year. Every directory club has a matched Instagram handle below; msj.ce is MSJ Cybersecurity/Ethical Hacking (email msj.ce.club2025@gmail.com) and msj.csf is California Scholarship Federation. Handles verified against live profiles 2026-08-24.",
   "categories": {
     "clubs": {
-      "description": "Student clubs listed in Club_Description_2026-27.pdf with a known Instagram handle",
+      "description": "Student clubs listed in MSJ Club Directory 2026-27.xlsx - one handle per directory club (87)",
       "enabled": true,
       "accounts": [
         "iknitmsjhs",
@@ -10,6 +10,7 @@
         "msj.amwa",
         "msj.aviation",
         "msj.ce",
+        "msj.csf",
         "msj.fcsn",
         "msj.futurephysicians",
         "msj.gamedev",
@@ -18,8 +19,10 @@
         "msj.isa",
         "msj.mun",
         "msj.pickleball",
+        "msj.swenext",
         "msj.tsa",
         "msj.vsa",
+        "msj_arc",
         "msj_artificialintelligence",
         "msj_msa",
         "msjathenaproject",
@@ -44,18 +47,22 @@
         "msjfilm",
         "msjgirlswhocode",
         "msjgreenclub",
+        "msjhsac",
         "msjhseconomics",
         "msjhsnahs",
         "msjinteract",
+        "msjinvestmentclub",
         "msjkeyclub",
         "msjkoreanclub",
         "msjleoclub",
         "msjliftingclub",
         "msjmakes",
         "msjmathclub",
+        "msjmedcorps",
         "msjmissionjapan",
         "msjmocktrial",
         "msjmusicimpromptu",
+        "msjnaadam_",
         "msjneuroscience",
         "msjpaws",
         "msjphilosophy",
@@ -77,6 +84,7 @@
         "msjtradingcardgameclub",
         "msjvams",
         "msjwistem",
+        "msjwritersblock",
         "msjy4c",
         "msjyoungmentors",
         "msjyouthalive",
@@ -87,12 +95,10 @@
       ]
     },
     "disbanded_2026_27": {
-      "description": "Clubs from previous years that do not appear in Club_Description_2026-27.pdf. Not official clubs this year, so not scraped - an account still existing does not make the club official. Kept for the record: if one of these turns out to be a 2026-27 club that simply renamed, move the handle back into \"clubs\".",
+      "description": "Clubs from previous years that do not appear in MSJ Club Directory 2026-27.xlsx. Not official clubs this year, so not scraped - an account still existing does not make the club official. Kept for the record: if one of these turns out to be a 2026-27 club that simply renamed, move the handle back into \"clubs\".",
       "enabled": false,
       "accounts": [
         "msj.cfc",
-        "msj.swenext",
-        "msj_arc",
         "msj_dc",
         "msjacoustics",
         "msjcloudandnetworking",
@@ -100,12 +106,7 @@
         "msjfrenchclub",
         "msjgenshe",
         "msjhistoryclub",
-        "msjhsac",
-        "msjinvestmentclub",
         "msjkah",
-        "msjmedcorps",
-        "msjnaadam_",
-        "msjwritersblock",
         "municipal_journal"
       ]
     },
@@ -127,13 +128,7 @@
       "accounts": []
     }
   },
-  "pendingHandles": [
-    {
-      "club": "MSJ California Scholarship Federation",
-      "email": "msjhs.csf@gmail.com",
-      "instagram": null
-    }
-  ],
+  "pendingHandles": [],
   "settings": {
     "defaultCategory": "clubs"
   },
