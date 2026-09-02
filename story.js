@@ -12,9 +12,10 @@ import { fileURLToPath } from 'url';
 
 import { getCredentialsPath } from './config-manager.js';
 import { fetchEventsForDate } from './story/event-source.js';
+import { loadRecurring, meetingsOnDate, asEvents } from './story/recurring.js';
 import { sortEvents, paginate } from './story/paginate.js';
 import { buildPage } from './story/template.js';
-import { renderPages } from './story/render.js';
+import { renderFitted } from './story/render.js';
 import { authenticateDrive, uploadImage, assertFolderWritable } from './story/drive.js';
 import { emit } from './utils/progress-events.js';
 
@@ -82,8 +83,18 @@ async function main() {
   }
 
   emit('phase', { name: 'fetch' });
-  const events = sortEvents(await fetchEventsForDate(credentialsPath, spreadsheetId, isoDate));
+  let events = sortEvents(await fetchEventsForDate(credentialsPath, spreadsheetId, isoDate));
   console.log(`✓ ${events.length} event(s) on ${isoDate}`);
+
+  // Weekly meetings are entered by hand on the settings tab, never scraped.
+  // They ride the last page as a compact strip - unless they are the whole
+  // schedule today, in which case they get the card to themselves.
+  let recurring = meetingsOnDate(loadRecurring(__dirname), isoDate);
+  if (events.length === 0 && recurring.length > 0) {
+    console.log(`✓ ${recurring.length} recurring meeting(s) carry the story alone`);
+    events = sortEvents(asEvents(recurring));
+    recurring = [];
+  }
 
   // A quiet day is not a failure. Weekends, holidays and summer are normal, and
   // a story reading "no events today" is worse than no story.
@@ -94,20 +105,27 @@ async function main() {
   }
 
   emit('phase', { name: 'paginate' });
-  const pages = paginate(events);
+  const pages = paginate(events, undefined, recurring.length > 0 ? 1 : 0);
   console.log(`✓ ${pages.length} page(s): [${pages.map(p => p.length).join(', ')}]`);
 
-  const html = pages.map((pageEvents, i) => buildPage({
+  // Built lazily: the renderer measures each page and asks for it again at a
+  // smaller scale if a day's captions ran long enough to overrun the card.
+  const builders = pages.map((pageEvents, i) => (scale) => buildPage({
     isoDate,
     events: pageEvents,
     page: i + 1,
     totalPages: pages.length,
-    totalEvents: events.length
+    totalEvents: events.length,
+    recurring: i === pages.length - 1 ? recurring : [],
+    scale
   }));
 
   emit('phase', { name: 'render' });
-  const images = await renderPages(html);
+  const { images, scales } = await renderFitted(builders);
   console.log(`✓ Rendered ${images.length} image(s)`);
+  scales.forEach((scale, i) => {
+    if (scale) console.log(`  page ${i + 1} scaled to ${scale.toFixed(2)}x to fit the card`);
+  });
 
   const written = [];
 

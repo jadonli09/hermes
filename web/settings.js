@@ -4,6 +4,7 @@
 // deployed somewhere with a URL.
 import fs from 'fs';
 import path from 'path';
+import { validateRecurring } from '../story/recurring.js';
 
 export const EDITABLE_ENV = {
   START_DAYS_AGO:       { type: 'int',   min: 0,    max: 365 },
@@ -18,6 +19,7 @@ const HANDLE = /^[A-Za-z0-9._]{1,30}$/;
 
 const envPath = (dir) => path.join(dir, '.env');
 const accountsPath = (dir) => path.join(dir, 'accounts.json');
+const recurringPath = (dir) => path.join(dir, 'recurring.json');
 
 function readEnvText(dir) {
   return fs.existsSync(envPath(dir)) ? fs.readFileSync(envPath(dir), 'utf-8') : '';
@@ -115,6 +117,11 @@ function validateEnv(updates) {
 
 export function readSettings(projectDir) {
   const accounts = JSON.parse(fs.readFileSync(accountsPath(projectDir), 'utf-8'));
+  // Recurring meetings are manual-only: the dashboard is the sole writer, so a
+  // missing file just means none have been added yet.
+  const recurring = fs.existsSync(recurringPath(projectDir))
+    ? JSON.parse(fs.readFileSync(recurringPath(projectDir), 'utf-8'))
+    : { meetings: [] };
   const parsed = parseEnv(readEnvText(projectDir));
 
   const env = {};
@@ -127,7 +134,7 @@ export function readSettings(projectDir) {
     secrets[key] = parsed[key] ? 'set' : 'missing';
   }
 
-  return { accounts, env, secrets };
+  return { accounts, recurring, env, secrets };
 }
 
 /**
@@ -142,12 +149,17 @@ export function writeSettings(projectDir, patch = {}) {
   // Validate everything before writing anything, so a bad handle in the third
   // category cannot leave .env updated and accounts.json not.
   if (patch.accounts) validateAccounts(patch.accounts);
+  const recurring = patch.recurring ? validateRecurring(patch.recurring) : null;
   const envUpdates = patch.env ? validateEnv(patch.env) : null;
 
   if (patch.accounts) {
     const existing = JSON.parse(fs.readFileSync(accountsPath(projectDir), 'utf-8'));
     const merged = { ...existing, ...patch.accounts };
     writeAtomic(accountsPath(projectDir), JSON.stringify(merged, null, 2) + '\n');
+  }
+
+  if (recurring) {
+    writeAtomic(recurringPath(projectDir), JSON.stringify(recurring, null, 2) + '\n');
   }
 
   if (envUpdates && Object.keys(envUpdates).length > 0) {

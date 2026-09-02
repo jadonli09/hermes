@@ -13,3 +13,4 @@ out/
 
 # Web dashboard run data
 .hermes/
+.gstack/

@@ -428,6 +428,20 @@ function paintSettings() {
       <input type="text" class="add-handle" placeholder="add a handle, press Enter" data-add="${escape(name)}" aria-label="Add handle to ${escape(name)}">
     </div>`).join('');
 
+  const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+  const recurringRows = settings.recurring.meetings.map((meeting, index) => `
+    <div class="recurring-row" data-rec-row="${index}">
+      <div class="recurring-fields">
+        <input type="text" data-rec-field="club" placeholder="Club" value="${escape(meeting.club)}" aria-label="Club name">
+        <input type="text" data-rec-field="time" placeholder="Time (e.g. Lunch)" value="${escape(meeting.time)}" aria-label="Meeting time">
+        <input type="text" data-rec-field="location" placeholder="Room" value="${escape(meeting.location)}" aria-label="Meeting location">
+        <button data-rec-remove="${index}" title="Remove meeting" aria-label="Remove ${escape(meeting.club || 'meeting')}">×</button>
+      </div>
+      <div class="day-toggles">${DAYS.map(day => `
+        <label><input type="checkbox" data-rec-day="${day}" ${meeting.days.includes(day) ? 'checked' : ''}>${day}</label>`).join('')}</div>
+    </div>`).join('');
+
   const secrets = Object.entries(settings.secrets)
     .map(([key, value]) => `<li><span>${escape(key)}</span><span class="status ${value === 'set' ? 'ok' : 'failed'}">${value}</span></li>`)
     .join('');
@@ -449,6 +463,13 @@ function paintSettings() {
         <div class="save-row" style="margin-top:18px">
           <button id="save-settings" class="primary">Save changes</button>
         </div>
+      </section>
+
+      <section class="panel">
+        <h3>Recurring meetings</h3>
+        <p class="hint">Standing weekly meetings, shown in a strip at the bottom of the story. Entered here by hand — never scraped.</p>
+        ${recurringRows || '<p class="note">No recurring meetings yet.</p>'}
+        <button class="link-button" id="add-recurring" style="margin-top:10px">+ Add meeting</button>
       </section>
 
       <section class="panel" id="usage-panel">
@@ -496,6 +517,33 @@ function paintSettings() {
       settings.accounts.categories[box.dataset.category].enabled = box.checked;
     });
   }
+
+  $('add-recurring').addEventListener('click', () => {
+    collectRecurring();
+    settings.recurring.meetings.push({ club: '', days: [], time: '', location: '' });
+    paintSettings();
+    loadUsage();
+  });
+
+  for (const button of $('settings-form').querySelectorAll('[data-rec-remove]')) {
+    button.addEventListener('click', () => {
+      collectRecurring();
+      settings.recurring.meetings.splice(Number(button.dataset.recRemove), 1);
+      paintSettings();
+      loadUsage();
+    });
+  }
+}
+
+// Recurring rows are plain inputs read back from the DOM, so typed-but-unsaved
+// text survives an add or remove repainting the form.
+function collectRecurring() {
+  settings.recurring.meetings = [...$('settings-form').querySelectorAll('[data-rec-row]')].map(row => ({
+    club: row.querySelector('[data-rec-field="club"]').value.trim(),
+    days: [...row.querySelectorAll('[data-rec-day]')].filter(box => box.checked).map(box => box.dataset.recDay),
+    time: row.querySelector('[data-rec-field="time"]').value.trim(),
+    location: row.querySelector('[data-rec-field="location"]').value.trim()
+  }));
 }
 
 let usageCache = null;
@@ -558,11 +606,13 @@ async function saveSettings() {
     if (input.value.trim() !== '') env[input.dataset.env] = input.value.trim();
   }
 
+  collectRecurring();
+
   try {
     settings = await api('/api/settings', {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ accounts: settings.accounts, env })
+      body: JSON.stringify({ accounts: settings.accounts, recurring: settings.recurring, env })
     });
 
     $('settings-status').textContent = 'Saved.';

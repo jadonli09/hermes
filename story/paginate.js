@@ -52,12 +52,17 @@ export function sortEvents(events) {
  *
  * @param {Array} events
  * @param {number} [maxPerPage]
+ * @param {number} [reserveLast] - Event slots to keep free on the final page,
+ *   so the recurring-meetings strip has room to render there
  * @returns {Array<Array>} one array of events per page
  */
-export function paginate(events, maxPerPage = MAX_PER_PAGE) {
+export function paginate(events, maxPerPage = MAX_PER_PAGE, reserveLast = 0) {
   if (!events || events.length === 0) return [];
 
-  const pageCount = Math.ceil(events.length / maxPerPage);
+  // Counting the reserved slots as phantom events forces an extra page exactly
+  // when the strip would not fit; the balanced split below then hands the
+  // smaller share to the last page, which is where the strip lives.
+  const pageCount = Math.ceil((events.length + reserveLast) / maxPerPage);
   const base = Math.floor(events.length / pageCount);
   const remainder = events.length % pageCount;
 

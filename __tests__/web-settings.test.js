@@ -126,6 +126,42 @@ describe('writeSettings', () => {
   });
 });
 
+describe('recurring meetings settings', () => {
+  const lifting = { club: 'Lifting Club', days: ['Tue', 'Thu'], time: 'Lunch', location: 'Weight Room' };
+
+  it('reads an empty list before the file exists', () => {
+    expect(readSettings(dir).recurring).toEqual({ meetings: [] });
+  });
+
+  it('round-trips a meetings list through writeSettings', () => {
+    const settings = writeSettings(dir, { recurring: { meetings: [lifting] } });
+    expect(settings.recurring.meetings).toEqual([lifting]);
+
+    const written = JSON.parse(fs.readFileSync(path.join(dir, 'recurring.json'), 'utf-8'));
+    expect(written.meetings).toEqual([lifting]);
+  });
+
+  it('rejects invalid meetings without writing anything', () => {
+    expect(() => writeSettings(dir, {
+      recurring: { meetings: [{ ...lifting, days: ['Someday'] }] }
+    })).toThrow(/day/i);
+
+    expect(fs.existsSync(path.join(dir, 'recurring.json'))).toBe(false);
+    expect(fs.readdirSync(dir).filter(f => f.includes('.tmp'))).toEqual([]);
+  });
+
+  it('validates recurring before writing accounts, so a bad meeting leaves both untouched', () => {
+    const before = fs.readFileSync(path.join(dir, 'accounts.json'), 'utf-8');
+
+    expect(() => writeSettings(dir, {
+      accounts: { categories: { clubs: { enabled: true, accounts: ['msjbio'] } } },
+      recurring: { meetings: [{ ...lifting, club: '' }] }
+    })).toThrow();
+
+    expect(fs.readFileSync(path.join(dir, 'accounts.json'), 'utf-8')).toBe(before);
+  });
+});
+
 describe('updateEnvText', () => {
   it('replaces an existing assignment without touching anything else', () => {
     expect(updateEnvText('A=1\n# comment\nB=2\n', { B: '9' })).toBe('A=1\n# comment\nB=9\n');

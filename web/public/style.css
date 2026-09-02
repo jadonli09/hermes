@@ -366,6 +366,16 @@ td.empty { color: var(--muted); padding: 28px 14px; text-align: center; }
 .handle button:hover { color: var(--clay); }
 input.add-handle { width: 220px; font-family: var(--mono); font-size: 12.5px; }
 
+.recurring-row { padding: 12px 0; border-top: 1px solid var(--line); }
+.recurring-row:first-of-type { border-top: 0; padding-top: 0; }
+.recurring-fields { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.recurring-fields input { flex: 1; min-width: 0; font-size: 13px; }
+.recurring-fields button { background: none; border: 0; color: var(--muted); padding: 0 4px; font-size: 16px; line-height: 1; border-radius: 999px; }
+.recurring-fields button:hover { color: var(--clay); }
+.day-toggles { display: flex; flex-wrap: wrap; gap: 10px; }
+.day-toggles label { display: flex; align-items: center; gap: 5px; font: 500 11px/1 var(--mono); color: var(--bone-2); letter-spacing: 0.06em; cursor: pointer; }
+.day-toggles input[type="checkbox"] { accent-color: var(--sage); width: 13px; height: 13px; }
+
 .save-row { display: flex; align-items: center; gap: 12px; }
 
 .secrets { list-style: none; padding: 0; margin: 0; }

@@ -1,7 +1,9 @@
 import { timeRank, sortEvents, paginate, scaleFor, groupByTime, MAX_PER_PAGE } from '../story/paginate.js';
 import { isPublishable, eventsOnDate } from '../story/event-source.js';
 import { monogram } from '../story/avatars.js';
-import { escapeHtml, formatHeading, densityFor, buildPage, normalizeLocation } from '../story/template.js';
+import {
+  escapeHtml, formatHeading, densityFor, buildPage, normalizeLocation, scaleToFit, SHEET_HEIGHT
+} from '../story/template.js';
 import { buildIntroPage } from '../story/intro.js';
 
 const ev = (over = {}) => ({
@@ -323,5 +325,68 @@ describe('buildPage location placement', () => {
     expect(out).toContain('ev-room beside');
     expect(out).not.toContain('ev-room below');
     expect(out).not.toContain('MSJHS Campus - Booth Map Locations');
+  });
+});
+
+describe('scaleToFit', () => {
+  // A card is SHEET_HEIGHT tall. At scale s its chrome (padding, header, strip,
+  // footer) eats `chrome * s` and the events want `content * s`, so this is the
+  // geometry the renderer measures on a real page.
+  const card = (scale, chrome, content) => ({
+    available: SHEET_HEIGHT - chrome * scale,
+    content: content * scale
+  });
+
+  it('leaves a page that already fits alone', () => {
+    const { available, content } = card(1.13, 420, 500);
+    expect(scaleToFit(1.13, available, content)).toBe(1.13);
+  });
+
+  it('shrinks a page that overflows', () => {
+    const { available, content } = card(1.13, 420, 900);
+    expect(scaleToFit(1.13, available, content)).toBeLessThan(1.13);
+  });
+
+  // The whole point: one measurement of an overflowing page has to land on a
+  // scale that actually fits, or the renderer spends passes converging on it.
+  it('lands on a scale the content fits at, from a single measurement', () => {
+    for (const chrome of [380, 420, 500]) {
+      for (const content of [900, 1200, 2000]) {
+        const measured = card(1.13, chrome, content);
+        const fitted = scaleToFit(1.13, measured.available, measured.content);
+        const after = card(fitted, chrome, content);
+        expect(after.content).toBeLessThanOrEqual(after.available);
+      }
+    }
+  });
+
+  it('is monotonic: the worse the overflow, the smaller the scale', () => {
+    const at = (content) => {
+      const m = card(1.13, 420, content);
+      return scaleToFit(1.13, m.available, m.content);
+    };
+    expect(at(1500)).toBeLessThan(at(1000));
+  });
+});
+
+describe('buildPage type scale', () => {
+  const evs = (n) => Array.from({ length: n }, (_, i) => ({
+    club_name: `msjclub${i}`, event_time: 'Lunch', location: 'B17', description: 'Meeting'
+  }));
+  const html = (n, scale) => buildPage({
+    isoDate: '2026-02-10', events: evs(n), page: 1, totalPages: 1, totalEvents: n, scale
+  });
+
+  it('sizes itself from the event count when no scale is given', () => {
+    expect(html(3)).toContain('data-scale="1.13"');
+  });
+
+  it('honours an explicit scale', () => {
+    expect(html(3, 0.9)).toContain('data-scale="0.9"');
+  });
+
+  it('applies the override to the type, not just the attribute', () => {
+    // .hd-title is font-size 74 * scale
+    expect(html(3, 0.5)).toContain('font-size:37.0px');
   });
 });

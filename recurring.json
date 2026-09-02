@@ -1,0 +1,20 @@
+{
+  "meetings": [
+    {
+      "club": "Lifting Club",
+      "days": [
+        "Tue"
+      ],
+      "time": "Lunch",
+      "location": "Weight Room"
+    },
+    {
+      "club": "DECA",
+      "days": [
+        "Wed"
+      ],
+      "time": "After School",
+      "location": "C120"
+    }
+  ]
+}
