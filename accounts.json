@@ -1,5 +1,5 @@
 {
-  "_source": "MSJ Club Directory 2026-27.xlsx (87 clubs) is authoritative for which clubs are official this year. Every directory club has a matched Instagram handle below; msj.ce is MSJ Cybersecurity/Ethical Hacking (email msj.ce.club2025@gmail.com) and msj.csf is California Scholarship Federation. Handles verified against live profiles 2026-08-24.",
+  "_source": "MSJ Club Directory 2026-27.xlsx (87 clubs) is authoritative for which clubs are official this year. Every directory club has a matched Instagram handle below; msj.ce is MSJ Cybersecurity/Ethical Hacking (email msj.ce.club2025@gmail.com) and msj.csf is California Scholarship Federation. Handles verified against live profiles 2026-08-24; NAHS, Universal Performers, Aviation and Red Cross re-pointed and re-verified 2026-09-06.",
   "categories": {
     "clubs": {
       "description": "Student clubs listed in MSJ Club Directory 2026-27.xlsx - one handle per directory club (87)",
@@ -8,7 +8,6 @@
         "iknitmsjhs",
         "missionxanime",
         "msj.amwa",
-        "msj.aviation",
         "msj.ce",
         "msj.csf",
         "msj.fcsn",
@@ -19,6 +18,7 @@
         "msj.isa",
         "msj.mun",
         "msj.pickleball",
+        "msj.redcross",
         "msj.swenext",
         "msj.tsa",
         "msj.vsa",
@@ -26,7 +26,9 @@
         "msj_arc",
         "msj_artificialintelligence",
         "msj_msa",
+        "msj_nahs",
         "msjathenaproject",
+        "msjaviationclub",
         "msjbeautification",
         "msjbestbuddies",
         "msjbio",
@@ -49,7 +51,6 @@
         "msjgirlswhocode",
         "msjgreenclub",
         "msjhseconomics",
-        "msjhsnahs",
         "msjinteract",
         "msjinvestmentclub",
         "msjkeyclub",
@@ -73,7 +74,6 @@
         "msjpredictivemodeling",
         "msjpsychology",
         "msjquantum",
-        "msjrcc",
         "msjrelayforlife",
         "msjrobotics",
         "msjrocketry",
@@ -91,7 +91,7 @@
         "phoenixmsj",
         "shss.missionsj",
         "tedxmsjhs",
-        "universalperformers"
+        "universal.performers"
       ]
     },
     "disbanded_2026_27": {
