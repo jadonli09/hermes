@@ -86,7 +86,14 @@ export class ApifyScraper {
     const input = {
       username: usernames,
       resultsLimit: this.resultsLimit,
-      onlyPostsNewerThan: toActorDate(startDate)
+      onlyPostsNewerThan: toActorDate(startDate),
+
+      // Pinned posts are returned like any other post and count against
+      // resultsLimit, and onlyPostsNewerThan is documented as not applying to
+      // them - so a club with three pinned posts from two years ago would spend
+      // three of its ten slots on items we then discard locally, every run.
+      // Dropping them actor-side means we pay for ten real posts instead.
+      skipPinnedPosts: true
     };
 
     // Cap billed items at the theoretical maximum this input can return, so a
@@ -161,9 +168,10 @@ export class ApifyScraper {
         continue;
       }
 
-      // The actor filters on onlyPostsNewerThan, but it does not apply that to
-      // pinned posts and has no upper bound - so re-check both ends locally.
-      // Count these: a high number means we are paying for posts we discard.
+      // onlyPostsNewerThan has no upper bound, and skipPinnedPosts is the actor
+      // honouring a request we cannot verify - so re-check both ends locally
+      // rather than trusting the filter. Count these: anything above zero means
+      // we are paying for posts we discard.
       const postDay = new Date(post.postDate + 'T00:00:00Z').getTime();
       if (postDay < startDay || postDay > endDay) {
         dateChecksSkipped++;
@@ -184,7 +192,8 @@ export class ApifyScraper {
     if (dateChecksSkipped > 0) {
       console.log(
         `  ⏭️  ${dateChecksSkipped} post(s) outside date range (oldest ${oldestSkipped}). ` +
-        `Expected for pinned posts, which the actor's onlyPostsNewerThan filter does not apply to.`
+        `We ask the actor to skip pinned posts and filter by date, so this should be rare - ` +
+        `a persistent count means we are being billed for posts we throw away.`
       );
     }
 
