@@ -1,8 +1,12 @@
 import { initialState, reduce, reduceAll } from './state.js';
 import { estimateCost } from './pricing.js';
+import { DAYS, normalizeRecurringRows, isBlankRow, sameSettings } from './settings-form.js';
 
 let state = initialState();
 let settings = null;
+// What the server last confirmed. Everything the form holds is compared against
+// this to tell an untouched settings tab from one with edits waiting.
+let savedSettings = null;
 let source = null;
 
 const $ = (id) => document.getElementById(id);
@@ -406,10 +410,28 @@ const NUMERIC_FIELDS = [
 ];
 
 async function loadSettings() {
+  // Opening the tab re-fetches, which repaints the form. If there are edits in
+  // it, that repaint would throw them away without a word - the tab is hidden,
+  // not unmounted, so leaving the form alone keeps them exactly as typed.
+  if (unsavedSettings()) {
+    loadUsage();
+    return;
+  }
+
   settings = await api('/api/settings');
+  // Through the same normalizer the form collects with, so the baseline and the
+  // form speak one shape - and so a row missing its days cannot break the paint.
+  settings.recurring.meetings = normalizeRecurringRows(settings.recurring.meetings);
+  savedSettings = snapshot(settings);
   paintSettings();
   loadUsage();
 }
+
+// A deep copy, so mutating settings.accounts in place cannot quietly move the
+// baseline the dirty check compares against.
+const snapshot = (value) => JSON.parse(JSON.stringify({
+  accounts: value.accounts, recurring: value.recurring, env: value.env
+}));
 
 function paintSettings() {
   const categories = Object.entries(settings.accounts.categories).map(([name, category]) => `
@@ -427,8 +449,6 @@ function paintSettings() {
         </span>`).join('')}</div>
       <input type="text" class="add-handle" placeholder="add a handle, press Enter" data-add="${escape(name)}" aria-label="Add handle to ${escape(name)}">
     </div>`).join('');
-
-  const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
   const recurringRows = settings.recurring.meetings.map((meeting, index) => `
     <div class="recurring-row" data-rec-row="${index}">
@@ -460,9 +480,6 @@ function paintSettings() {
             <label for="env-${key}">${label}</label>
             <input type="text" id="env-${key}" data-env="${key}" value="${escape(settings.env[key] ?? '')}" inputmode="decimal">
           </div>`).join('')}
-        <div class="save-row" style="margin-top:18px">
-          <button id="save-settings" class="primary">Save changes</button>
-        </div>
       </section>
 
       <section class="panel">
@@ -487,7 +504,6 @@ function paintSettings() {
       </section>
     </div>`;
 
-  $('save-settings').addEventListener('click', saveSettings);
   $('refresh-usage').addEventListener('click', loadUsage);
 
   for (const button of $('settings-form').querySelectorAll('[data-remove]')) {
@@ -533,17 +549,52 @@ function paintSettings() {
       loadUsage();
     });
   }
+
+  paintSaveBar();
 }
 
 // Recurring rows are plain inputs read back from the DOM, so typed-but-unsaved
-// text survives an add or remove repainting the form.
+// text survives an add or remove repainting the form. Blank rows are kept here
+// on purpose: adding two rows before filling either one is normal editing.
 function collectRecurring() {
-  settings.recurring.meetings = [...$('settings-form').querySelectorAll('[data-rec-row]')].map(row => ({
-    club: row.querySelector('[data-rec-field="club"]').value.trim(),
-    days: [...row.querySelectorAll('[data-rec-day]')].filter(box => box.checked).map(box => box.dataset.recDay),
-    time: row.querySelector('[data-rec-field="time"]').value.trim(),
-    location: row.querySelector('[data-rec-field="location"]').value.trim()
-  }));
+  settings.recurring.meetings = normalizeRecurringRows(
+    [...$('settings-form').querySelectorAll('[data-rec-row]')].map(row => ({
+      club: row.querySelector('[data-rec-field="club"]').value,
+      days: [...row.querySelectorAll('[data-rec-day]')].filter(box => box.checked).map(box => box.dataset.recDay),
+      time: row.querySelector('[data-rec-field="time"]').value,
+      location: row.querySelector('[data-rec-field="location"]').value
+    }))
+  );
+}
+
+function collectEnv() {
+  const env = {};
+  for (const input of $('settings-form').querySelectorAll('[data-env]')) {
+    if (input.value.trim() !== '') env[input.dataset.env] = input.value.trim();
+  }
+  return env;
+}
+
+// What a save would send. Blank rows are dropped here rather than in
+// collectRecurring: an abandoned row should not fail validation and take the
+// rest of the page's edits down with it, but it should still sit in the form.
+function collectSettings() {
+  collectRecurring();
+  return {
+    accounts: settings.accounts,
+    recurring: { meetings: settings.recurring.meetings.filter(row => !isBlankRow(row)) },
+    env: collectEnv()
+  };
+}
+
+function unsavedSettings() {
+  return savedSettings !== null && !sameSettings(collectSettings(), savedSettings);
+}
+
+function paintSaveBar(message = null, tone = null) {
+  const dirty = unsavedSettings();
+  $('settings-status').textContent = message ?? (dirty ? 'Unsaved changes' : '');
+  $('settings-status').className = `status${tone ? ` ${tone}` : dirty ? ' dirty' : ''}`;
 }
 
 let usageCache = null;
@@ -601,31 +652,43 @@ function paintUsage({ claude, apify }) {
 }
 
 async function saveSettings() {
-  const env = {};
-  for (const input of $('settings-form').querySelectorAll('[data-env]')) {
-    if (input.value.trim() !== '') env[input.dataset.env] = input.value.trim();
-  }
-
-  collectRecurring();
+  const patch = collectSettings();
+  paintSaveBar('Saving…');
 
   try {
     settings = await api('/api/settings', {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ accounts: settings.accounts, recurring: settings.recurring, env })
+      body: JSON.stringify(patch)
     });
 
-    $('settings-status').textContent = 'Saved.';
-    $('settings-status').className = 'status ok';
+    settings.recurring.meetings = normalizeRecurringRows(settings.recurring.meetings);
+    savedSettings = snapshot(settings);
     paintSettings();
+    paintSaveBar('Saved.', 'ok');
     loadUsage();
   } catch (error) {
-    // The server validates before writing anything, so a rejected save left both
-    // files untouched. Say so rather than leaving the user guessing.
-    $('settings-status').textContent = `${error.message} — nothing was saved.`;
-    $('settings-status').className = 'status failed';
+    // The server validates before writing anything, so a rejected save left every
+    // file untouched. Say so rather than leaving the user guessing - and leave
+    // the form exactly as it is, so nothing typed has to be typed again.
+    paintSaveBar(`${error.message} — nothing was saved.`, 'failed');
   }
 }
+
+$('save-settings').addEventListener('click', saveSettings);
+
+// One delegated pair on the container, which outlives every repaint of its
+// contents, so the bar keeps up with typing and with day checkboxes alike.
+$('settings-form').addEventListener('input', () => paintSaveBar());
+$('settings-form').addEventListener('change', () => paintSaveBar());
+
+// The last line of defence: reloading with edits in the form used to drop them
+// silently, which is how a meeting could look entered and never be saved.
+window.addEventListener('beforeunload', (event) => {
+  if (!unsavedSettings()) return;
+  event.preventDefault();
+  event.returnValue = '';
+});
 
 // ---- boot: reattach to a run already in flight
 

@@ -99,7 +99,12 @@
         <p class="lede">Which accounts are tracked, how far back a scrape looks, and what the two paid services have used.</p>
       </div>
       <div id="settings-form"></div>
-      <p id="settings-status" class="status" role="status"></p>
+      <!-- Outside #settings-form so repainting the panels cannot take the save
+           control away, and sticky so it is reachable from any panel. -->
+      <div id="settings-save" class="save-bar">
+        <button id="save-settings" class="primary">Save changes</button>
+        <p id="settings-status" class="status" role="status"></p>
+      </div>
     </section>
   </main>
 

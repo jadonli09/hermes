@@ -376,7 +376,18 @@ input.add-handle { width: 220px; font-family: var(--mono); font-size: 12.5px; }
 .day-toggles label { display: flex; align-items: center; gap: 5px; font: 500 11px/1 var(--mono); color: var(--bone-2); letter-spacing: 0.06em; cursor: pointer; }
 .day-toggles input[type="checkbox"] { accent-color: var(--sage); width: 13px; height: 13px; }
 
-.save-row { display: flex; align-items: center; gap: 12px; }
+/* The save control follows you down the settings tab: its panels are taller
+ * than the viewport, and a button parked inside one of them reads as belonging
+ * to that panel alone. */
+.save-bar {
+  position: sticky; bottom: 0; z-index: 5;
+  display: flex; align-items: center; gap: 14px;
+  margin-top: 18px; padding: 14px 20px;
+  background: var(--ink-1); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 -10px 24px -18px #000;
+}
+.save-bar .status { margin: 0; }
+.save-bar .status.dirty { color: var(--ochre); }
 
 .secrets { list-style: none; padding: 0; margin: 0; }
 .secrets li { display: flex; justify-content: space-between; padding: 6px 0; border-top: 1px solid var(--line); font: 12.5px/1.4 var(--mono); }
