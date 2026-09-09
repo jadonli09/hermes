@@ -15,6 +15,23 @@
       ],
       "time": "After School",
       "location": "C120"
+    },
+    {
+      "club": "Writer's Block",
+      "days": [
+        "Tue",
+        "Thu"
+      ],
+      "time": "Lunch",
+      "location": "E2A"
+    },
+    {
+      "club": "Club Council",
+      "days": [
+        "Wed"
+      ],
+      "time": "Lunch",
+      "location": "C120"
     }
   ]
 }
