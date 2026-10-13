@@ -3,7 +3,8 @@
     {
       "club": "Lifting Club",
       "days": [
-        "Tue"
+        "Tue",
+        "Thu"
       ],
       "time": "Lunch",
       "location": "Weight Room"
