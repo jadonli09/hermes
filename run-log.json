@@ -1,19 +1,19 @@
 {
-  "timestamp": "2026-10-07T06:32:47.418Z",
+  "timestamp": "2026-10-13T17:35:08.726Z",
   "dateRange": {
-    "start": "2026-09-26",
-    "end": "2027-10-07"
+    "start": "2026-10-02",
+    "end": "2027-10-13"
   },
   "totalClubs": 93,
   "clubsProcessed": 93,
   "clubsFailed": 0,
   "postsScraped": 60,
-  "newPostsAdded": 55,
-  "duplicatesSkipped": 5,
-  "apiCallsMade": 55,
+  "newPostsAdded": 31,
+  "duplicatesSkipped": 29,
+  "apiCallsMade": 31,
   "extractionFailures": 0,
   "extractionErrors": 0,
   "extractionFailureReasons": {},
   "failedClubs": [],
-  "duration": 303718
+  "duration": 828004
 }
