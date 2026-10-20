@@ -38,19 +38,24 @@ test('DST uses Pacific calendar dates; morning catch-up stops at 06:00', () => {
   expect(slotFor(new Date('2026-10-19T12:59:00Z')).targetDate).toBe('2026-10-19');
   expect(slotFor(new Date('2026-10-19T13:00:00Z'))).toBeNull();
 });
-test('normal Sunday cap is three, daily one, outages expand and initial unknown history catches up eleven days', () => {
-  const checkpoint = { scope: 'a', coveredFrom: pacificInstant('2026-10-15', 23) };
-  expect(fetchPlan(slotFor(sunday), checkpoint, 'a').limit).toBe(3);
-  const next = { ...checkpoint, coveredFrom: pacificInstant('2026-10-18', 23) };
-  expect(fetchPlan(slotFor(new Date('2026-10-20T06:00:00Z')), next, 'a').limit).toBe(1);
-  expect(fetchPlan(slotFor(sunday), null, 'a').limit).toBe(11);
-});
-test('long outage uses eleven-day catch-up; scope changes force bootstrap', () => {
-  const slot = slotFor(sunday);
-  const old = { scope: 'a', coveredFrom: pacificInstant('2026-10-01', 23) };
-  const plan = fetchPlan(slot, old, 'a');
-  expect(plan.since).toBe(pacificInstant('2026-10-08')); expect(plan.limit).toBe(11);
-  expect(fetchPlan(slot, old, 'b').limit).toBe(11);
+describe('rolling fetch window', () => {
+  const monday = slotFor(new Date('2026-10-20T05:00:00Z')); // night 2026-10-19
+  test('normal night re-scans a rolling 4-day window', () =>
+    expect(fetchPlan(monday, { scope: 'a', coveredFrom: '2026-10-19T04:00:00.000Z' }, 'a'))
+      .toMatchObject({ since: '2026-10-16T07:00:00.000Z', limit: 8, catchUp: false, reason: 'rolling' }));
+  test('after a blocked or missed stretch the window widens back to the last healthy run', () =>
+    expect(fetchPlan(monday, { scope: 'a', coveredFrom: '2026-10-14T04:00:00.000Z' }, 'a'))
+      .toMatchObject({ since: '2026-10-14T04:00:00.000Z', limit: 14, catchUp: true, reason: 'extended-after-gap' }));
+  test('never looks back more than 11 days', () =>
+    expect(fetchPlan(monday, { scope: 'a', coveredFrom: '2026-10-01T04:00:00.000Z' }, 'a'))
+      .toMatchObject({ since: '2026-10-09T07:00:00.000Z', limit: 22, reason: 'max-lookback' }));
+  test('no history uses the 11-day window', () =>
+    expect(fetchPlan(monday, null, 'a')).toMatchObject({ since: '2026-10-09T07:00:00.000Z', limit: 22, reason: 'no-trusted-history' }));
+  test('a scope change is treated as no history', () =>
+    expect(fetchPlan(monday, { scope: 'a', coveredFrom: '2026-10-19T04:00:00.000Z' }, 'b')).toMatchObject({ reason: 'no-trusted-history', limit: 22 }));
+  test('Sunday after skipped Fri/Sat still overlaps Thursday', () =>
+    expect(fetchPlan(slotFor(new Date('2026-10-19T05:00:00Z')), { scope: 'a', coveredFrom: '2026-10-16T04:00:00.000Z' }, 'a'))
+      .toMatchObject({ since: '2026-10-15T07:00:00.000Z', limit: 8, reason: 'rolling' }));
 });
 test('default planning performs no writes, paid work, or delivery', async () => {
   const child = jest.fn(), sender = jest.fn();
@@ -91,20 +96,14 @@ test('overlap lock and recipient validation prevent paid work', async () => {
 
 test('old weekly audit marker never triggers backfill while refreshes remain active', () => {
   const last = { scope: 'a', coveredFrom: pacificInstant('2026-10-15', 23), auditAt: pacificInstant('2026-01-01', 23) };
-  expect(fetchPlan(slotFor(sunday), last, 'a')).toMatchObject({ limit: 3, catchUp: false, reason: 'incremental' });
-});
-test('short gaps expand incrementally; seven inactive Pacific calendar days trigger eleven-day catch-up', () => {
-  const slot = slotFor(sunday);
-  expect(fetchPlan(slot, { scope: 'a', coveredFrom: pacificInstant('2026-10-14', 23) }, 'a')).toMatchObject({ limit: 4, catchUp: false });
-  expect(fetchPlan(slot, { scope: 'a', coveredFrom: pacificInstant('2026-10-12', 23) }, 'a')).toMatchObject({ limit: 6, catchUp: false });
-  expect(fetchPlan(slot, { scope: 'a', coveredFrom: pacificInstant('2026-10-11', 23) }, 'a')).toMatchObject({ limit: 11, catchUp: true, reason: 'inactive-at-least-seven-days' });
+  expect(fetchPlan(slotFor(sunday), last, 'a')).toMatchObject({ limit: 8, catchUp: false, reason: 'rolling' });
 });
 test('successful full manual activity counts; failed and partial refreshes cannot advance activity', () => {
   const scope = refreshScope(dir);
   const old = { scope, coveredFrom: pacificInstant('2026-10-01', 23) };
   recordRefreshActivity(dir, { startedAt: pacificInstant('2026-10-15', 23), scope, summary: healthy[0].summary, fullCoverage: true });
   const current = latestRefresh(dir, old, scope);
-  expect(fetchPlan(slotFor(sunday), current, scope)).toMatchObject({ limit: 3, catchUp: false });
+  expect(fetchPlan(slotFor(sunday), current, scope)).toMatchObject({ limit: 8, catchUp: false });
   recordRefreshActivity(dir, { startedAt: pacificInstant('2026-10-16', 23), scope, summary: healthy[0].summary, fullCoverage: false });
   recordRefreshActivity(dir, { startedAt: pacificInstant('2026-10-17', 23), scope, summary: { ...healthy[0].summary, totalExtractionErrors: 1 }, fullCoverage: true });
   expect(latestRefresh(dir, old, scope)).toEqual(current);
@@ -114,7 +113,7 @@ test('successful full manual activity counts; failed and partial refreshes canno
 test('manual activity after 23:00 does not invalidate the current nightly slot', () => {
   const slot = slotFor(sunday);
   const plan = fetchPlan(slot, { scope: 'a', coveredFrom: '2026-10-19T06:10:00Z' }, 'a');
-  expect(plan).toMatchObject({ limit: 1, catchUp: false });
+  expect(plan).toMatchObject({ limit: 8, catchUp: false, reason: 'rolling' });
   expect(Date.parse(plan.since)).toBeLessThan(Date.parse(slot.scheduledAt));
 });
 
@@ -151,7 +150,7 @@ test('old failed jobs cannot widen a new normal bootstrap or count as activity',
  const scope=refreshScope(dir);
  writeState(path.join(dir,'.hermes/nightly/2026-10-01/job.json'),{scope,plan:{since:'2026-09-21T07:00:00Z'},status:'pending'});
  const r=await runNightly({...base(),execute:false,coverageMode:'best-effort'});
- expect(r.plan.since).toBe(pacificInstant('2026-10-08')); expect(r.plan.limit).toBe(11);
+ expect(r.plan.since).toBe(pacificInstant('2026-10-08')); expect(r.plan.limit).toBe(22);
 });
 test('strict rejects an incomplete coverage report even with successful pipeline summary',async()=>{
  const child=jest.fn().mockResolvedValue([...healthy,{t:'coverage',report:{version:2,complete:false,accounts:{a:{complete:false,status:'blocked'}}}}]);

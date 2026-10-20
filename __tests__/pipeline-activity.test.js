@@ -25,20 +25,20 @@ test('successful refresh before a later render interruption still counts as proc
 test('new plan uses recent healthy run not missing-handle or failed-job floor',async()=>{
  saved('2026-10-18');saved('2026-10-01',{refreshed:false});writeState(path.join(root,'.hermes/nightly/account-coverage.json'),{scope,accounts:{bad:{gapSince:pacificInstant('2026-10-03')}}});
  const result=await runNightly({projectDir:root,now:()=>new Date('2026-10-20T04:00:00Z')});
- expect(result.plan).toMatchObject({since:pacificInstant('2026-10-18',21),limit:1,catchUp:false});
+ expect(result.plan).toMatchObject({since:'2026-10-16T07:00:00.000Z',limit:8,catchUp:false,reason:'rolling'});
  expect(fs.existsSync(path.join(root,'.hermes/pipeline-activity.json'))).toBe(false);
 });
-test('Thursday activity yields Sunday Friday-through-Sunday window with cap three',()=>{
+test('Thursday activity yields a Sunday window that overlaps Thursday',()=>{
  saved('2026-10-15');const p=fetchPlan(slotFor(new Date('2026-10-19T04:00:00Z')),latestPipelineActivity(root,scope),scope);
- expect(p).toMatchObject({since:pacificInstant('2026-10-15',21),limit:3,catchUp:false});
+ expect(p).toMatchObject({since:'2026-10-15T07:00:00.000Z',limit:8,catchUp:false,reason:'rolling'});
 });
-test('seven days without successful pipeline triggers eleven-day catch-up, not arbitrary old gap',()=>{
+test('a week without a healthy pipeline widens back to that run, not an arbitrary old gap',()=>{
  saved('2026-10-11');const p=fetchPlan(slotFor(new Date('2026-10-19T04:00:00Z')),latestPipelineActivity(root,scope),scope);
- expect(p).toMatchObject({since:pacificInstant('2026-10-08'),limit:11,catchUp:true});
+ expect(p).toMatchObject({since:pacificInstant('2026-10-11',21),limit:16,catchUp:true,reason:'extended-after-gap'});
 });
 test('account change bootstraps while retaining unchanged gaps and archiving removed handles',()=>{
  saved('2026-10-18');expect(latestPipelineActivity(root,'changed')).toBeNull();
- const p=fetchPlan(slotFor(new Date('2026-10-20T04:00:00Z')),latestPipelineActivity(root,'changed'),'changed');expect(p.limit).toBe(11);
+ const p=fetchPlan(slotFor(new Date('2026-10-20T04:00:00Z')),latestPipelineActivity(root,'changed'),'changed');expect(p.limit).toBe(22);
  const prior={scope,accounts:{good:{gapSince:'2026-09-01T00:00:00Z'},removed:{gapSince:'2026-09-02T00:00:00Z'}}};
  const next=advanceAccounts(prior,{accounts:{good:{complete:true,status:'observed-window',reasons:[]}}},{scope:'changed',since:p.since,scheduledAt:'2026-10-20T04:00:00Z'});
  expect(next.accounts.good.gapSince).toBe(prior.accounts.good.gapSince);expect(next.previousScopes[0].accounts.removed).toEqual(prior.accounts.removed);

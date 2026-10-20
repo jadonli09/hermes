@@ -31,21 +31,28 @@ export function slotFor(now = new Date()) {
   if (!night || [5, 6].includes(new Date(`${night}T12:00:00Z`).getUTCDay())) return null;
   return { night, targetDate: addDays(night, 1), scheduledAt: pacificInstant(night, 21), cutoff: pacificInstant(addDays(night, 1), 6) };
 }
+// Every night re-scans an overlapping window so a post missed once (blocked
+// profile, late visibility, several posts in a day) gets more chances. Posts
+// already in the Sheet are skipped before extraction, so overlap costs only
+// Apify rows, not Claude calls.
+export const LOOKBACK_DAYS = 4, MAX_LOOKBACK_DAYS = 11, MIN_RESULTS_LIMIT = 8;
 export function fetchPlan(slot, checkpoint, scope) {
   const last = checkpoint?.scope === scope ? checkpoint : null;
   const dayOf = instant => { const p = localParts(new Date(instant)); return `${p.year}-${p.month}-${p.day}`; };
   const dayGap = date => Math.round((Date.parse(`${slot.night}T12:00:00Z`) - Date.parse(`${date}T12:00:00Z`)) / DAY);
   if (last && (!Number.isFinite(Date.parse(last.coveredFrom)) || Date.parse(last.coveredFrom) >= Date.parse(slot.cutoff))) throw new Error('Invalid refresh checkpoint');
-  // Inactivity, not a weekly timer: seven Pacific calendar days without a
-  // successful all-account pipeline triggers catch-up. Coverage gaps are separate.
-  const catchUp = !last || dayGap(dayOf(last.coveredFrom)) >= 7;
-  let since = catchUp ? pacificInstant(addDays(slot.night, -10)) : last.coveredFrom;
+  const rolling = pacificInstant(addDays(slot.night, -(LOOKBACK_DAYS - 1)));
+  const floor = pacificInstant(addDays(slot.night, -(MAX_LOOKBACK_DAYS - 1)));
+  // Widen back to the last source-healthy run, never past the floor.
+  let since = !last ? floor : new Date(Math.max(Date.parse(floor), Math.min(Date.parse(rolling), Date.parse(last.coveredFrom)))).toISOString();
   // A manual refresh can finish during the same night's catch-up window.
   // Reuse the scheduled boundary conservatively rather than rejecting activity.
   if (Date.parse(since) >= Date.parse(slot.scheduledAt)) since = new Date(Date.parse(slot.scheduledAt) - 1).toISOString();
-  // Older unresolved coverage stays in the account ledger, not this normal window.
-  const limit = Math.max(1, dayGap(dayOf(since)) + (catchUp ? 1 : 0));
-  return { since, limit, catchUp, reason: !last ? 'no-trusted-history' : catchUp ? 'inactive-at-least-seven-days' : 'incremental', budgetUsd: 2 };
+  const limit = Math.max(MIN_RESULTS_LIMIT, 2 * (dayGap(dayOf(since)) + 1));
+  const reason = !last ? 'no-trusted-history'
+    : since === floor && Date.parse(last.coveredFrom) < Date.parse(floor) ? 'max-lookback'
+    : Date.parse(since) < Date.parse(rolling) ? 'extended-after-gap' : 'rolling';
+  return { since, limit, catchUp: reason !== 'rolling', reason, budgetUsd: 2 };
 }
 
 export function runChild(script, args, { projectDir, env, logFile, timeoutMs = 35 * 60 * 1000 }) {
