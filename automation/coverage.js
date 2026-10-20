@@ -51,6 +51,18 @@ export function classifyCoverage(items, usernames, limit, diagnostics = {}) {
   const complete = Object.values(accounts).length>0 && Object.values(accounts).every(x=>x.complete);
   return { version:2, complete, warning:complete ? null : COVERAGE_WARNING, accounts, diagnostics };
 }
+// Healthy nights see 0-4 of 93 accounts blocked; Instagram outages block ~90.
+// Only a healthy run may advance the watermark or skip the email warning.
+export const BLOCKED_RATIO_LIMIT = 0.25;
+export function sourceHealth(report) {
+  const accounts = Object.values(report?.accounts || {});
+  const blocked = accounts.filter(x => x.reasons?.includes('blocked')).length;
+  const requested = accounts.length;
+  return { healthy: requested > 0 && blocked / requested <= BLOCKED_RATIO_LIMIT, blocked, requested };
+}
+export function blockedWarning({ blocked, requested }, lookbackDays) {
+  return `Instagram blocked the scraper for ${blocked} of ${requested} clubs tonight, so their newest posts may be missing from these images. The next nightly run automatically re-checks at least the last ${lookbackDays} days.`;
+}
 export function advanceAccounts(previous, report, {scope,since,scheduledAt}) {
   const state = previous?.scope===scope ? structuredClone(previous) : {version:1,scope,accounts:{},
     ...(previous ? {previousScopes:[...(previous.previousScopes || []),{scope:previous.scope,accounts:structuredClone(previous.accounts || {})}]} : {})};

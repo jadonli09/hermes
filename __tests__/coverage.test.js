@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { classifyCoverage, parseActorDiagnostics, advanceAccounts, coverageFloor } from '../automation/coverage.js';
+import { classifyCoverage, parseActorDiagnostics, advanceAccounts, coverageFloor, sourceHealth, blockedWarning } from '../automation/coverage.js';
 const fixture=name=>JSON.parse(fs.readFileSync(new URL(`./fixtures/coverage/${name}.json`,import.meta.url)));
 const reportFor=name=>{const f=fixture(name);return classifyCoverage(f.items,f.input.username,f.input.resultsLimit,parseActorDiagnostics(f.log));};
 test('real current dataset distinguishes blocked empties, absent accounts, missing handle and dropped pages',()=>{
@@ -46,4 +46,15 @@ test('coauthor content is reported as evidence, never as complete input coverage
  const r=classifyCoverage([{inputUrl:'https://www.instagram.com/owner',ownerUsername:'owner',url:'https://www.instagram.com/p/ABC/',timestamp:'2026-10-13T00:00:00Z',coauthorProducers:[{username:'collab'}]}],['owner','collab'],3,{logAvailable:true});
  expect(r.accounts.collab.complete).toBe(false);
  expect(r.accounts.collab.relatedContent).toEqual(['https://www.instagram.com/p/ABC/']);
+});
+
+describe('sourceHealth', () => {
+  const acct = blocked => ({ status: blocked ? 'blocked' : 'observed-window', reasons: blocked ? ['blocked'] : [] });
+  const report = (b, total) => ({ accounts: Object.fromEntries(Array.from({ length: total }, (_, i) => [`a${i}`, acct(i < b)])) });
+  test('healthy night with a few blocked accounts', () => expect(sourceHealth(report(4, 93))).toEqual({ healthy: true, blocked: 4, requested: 93 }));
+  test('mass-blocked night is unhealthy', () => expect(sourceHealth(report(90, 93))).toEqual({ healthy: false, blocked: 90, requested: 93 }));
+  test('threshold is inclusive at 25%', () => { expect(sourceHealth(report(1, 4)).healthy).toBe(true); expect(sourceHealth(report(26, 100)).healthy).toBe(false); });
+  test('missing report is unhealthy', () => { expect(sourceHealth(null)).toEqual({ healthy: false, blocked: 0, requested: 0 }); expect(sourceHealth({}).healthy).toBe(false); });
+  test('ambiguous-empty and cap-reached do not count as blocked', () => expect(sourceHealth({ accounts: { a: { reasons: ['ambiguous-empty'] }, b: { reasons: ['cap-reached'] } } }).blocked).toBe(0));
+  test('blocked warning copy', () => expect(blockedWarning({ blocked: 90, requested: 93 }, 4)).toBe('Instagram blocked the scraper for 90 of 93 clubs tonight, so their newest posts may be missing from these images. The next nightly run automatically re-checks at least the last 4 days.'));
 });
