@@ -2,7 +2,7 @@ import {jest} from '@jest/globals';
 import fs from 'node:fs';import os from 'node:os';import path from 'node:path';
 import {readState,writeState} from '../automation/state.js';
 import {refreshScope} from '../automation/refresh-activity.js';
-import {healthyPipeline,latestPipelineActivity,recordPipelineActivity,migratePipelineActivity} from '../automation/pipeline-activity.js';
+import {healthyPipeline,latestPipelineActivity,recordPipelineActivity,migratePipelineActivity,manualSourceHealthy} from '../automation/pipeline-activity.js';
 import {runNightly,fetchPlan,slotFor,pacificInstant} from '../automation/nightly.js';
 import {advanceAccounts,qualifyOutstandingGaps} from '../automation/coverage.js';
 let root,scope;beforeEach(()=>{root=fs.mkdtempSync(path.join(os.tmpdir(),'hermes-pipeline-test-'));scope=refreshScope(root);});afterEach(()=>fs.rmSync(root,{recursive:true,force:true}));
@@ -85,4 +85,10 @@ test('blocked nightly still renders but does not advance activity',async()=>{
  const job=readState(path.join(root,'.hermes/nightly/2026-10-19/job.json'));expect(job.sourceHealth).toEqual({healthy:false,blocked:90,requested:93});
  expect(readState(path.join(root,'.hermes/pipeline-activity.json'))).toBeNull();
  expect(latestPipelineActivity(root,scope).coveredFrom).toBe(pacificInstant('2026-10-18',21));
+});
+test('manual runs: Playwright counts as healthy, Apify needs an unblocked report',()=>{
+ expect(manualSourceHealthy('playwright',undefined)).toBe(true);
+ expect(manualSourceHealthy('apify',blockedReport(90,93))).toBe(false);
+ expect(manualSourceHealthy('apify',blockedReport(4,93))).toBe(true);
+ expect(manualSourceHealthy('apify',undefined)).toBe(false);
 });

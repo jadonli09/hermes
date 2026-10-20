@@ -43,3 +43,7 @@ export function migratePipelineActivity(projectDir,scope) {
   if(activity) writeState(path.join(projectDir,'.hermes/pipeline-activity.json'),{...activity,version:2,sourceHealthy:true});
   return activity;
 }
+// Manual runs: only Apify reports coverage; a Playwright run has no block report.
+export function manualSourceHealthy(backendName, coverageReport) {
+  return backendName !== 'apify' || sourceHealth(coverageReport).healthy;
+}

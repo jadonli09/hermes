@@ -152,7 +152,7 @@ export class ApifyScraper {
       if ([...this.postsByAccount.values()].some(posts => posts.length > this.resultsLimit)) throw new Error('Actor exceeded requested per-profile cap; review coverage');
       const saturated = [...this.postsByAccount].filter(([, posts]) => posts.length === this.resultsLimit).map(([name]) => name);
       if (saturated.length) {
-        console.warn(`Coverage relies on the configured one-post-per-day assumption for ${saturated.length} capped account(s); no automatic paid expansion`);
+        console.warn(`${saturated.length} account(s) hit the per-run post cap; older posts in the window may be beyond it`);
         emit('coverage', { assumedDailyLimit: 1, cappedAccounts: saturated, completenessVerified: false });
       }
     }

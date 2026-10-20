@@ -1,5 +1,5 @@
 // Main orchestrator for Instagram scraping, AI processing, and Google Sheets integration
-import { recordPipelineActivity } from './automation/pipeline-activity.js';
+import { recordPipelineActivity, manualSourceHealthy } from './automation/pipeline-activity.js';
 import path from 'path';
 import { assertNoPendingAppend } from './automation/sheets-append.js';
 import { lock } from './automation/state.js';
@@ -236,7 +236,8 @@ async function main() {
       fullCoverage: (scraperBackend.name !== 'apify' || scraperBackend.getCoverage?.()?.complete === true) && !config.category && clubsToProcess.length === allAccounts.length });
 
     if (!process.env.HERMES_APIFY_STATE) recordPipelineActivity(__dirname, { startedAt, scope, summary,
-      allAccountsProcessed: !config.category && clubsToProcess.length === allAccounts.length });
+      allAccountsProcessed: !config.category && clubsToProcess.length === allAccounts.length,
+      sourceHealthy: manualSourceHealthy(scraperBackend.name, scraperBackend.getCoverage?.()) });
 
     // Print final success message
     metrics.printFinalSuccess();
