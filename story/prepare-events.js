@@ -1,7 +1,7 @@
 import fs from 'node:fs';
-import { consolidateEvents } from './consolidate.js';
+import { consolidateEvents, dedupeSamePost } from './consolidate.js';
 export function prepareEvents(events, reviews=JSON.parse(fs.readFileSync(new URL('./reviewed-events.json',import.meta.url),'utf8'))) {
-  const reviewed=events.map(event=>{
+  const reviewed=dedupeSamePost(events).map(event=>{
     const correction=reviews.find(r=>Object.entries(r.match).every(([key,value])=>event[key]===value));
     return correction ? {...event,...correction.set, reviewed_correction:{reason:correction.reason, original:{...event}}} : {...event};
   });

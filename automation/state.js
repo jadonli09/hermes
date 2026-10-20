@@ -24,6 +24,7 @@ export function lock(file) {
   return () => fs.unlinkSync(file);
 }
 export function canonicalPostUrl(value) {
-  const match = String(value || '').match(/^https?:\/\/(?:www\.)?instagram\.com\/(?:p|reel|tv)\/([^/?#]+)/i);
+  // The Playwright scraper records profile-prefixed links (/club/p/ID/).
+  const match = String(value || '').match(/^https?:\/\/(?:www\.)?instagram\.com\/(?:[^/?#]+\/)?(?:p|reel|tv)\/([^/?#]+)/i);
   return match ? `https://www.instagram.com/p/${match[1]}/` : String(value || '').trim();
 }

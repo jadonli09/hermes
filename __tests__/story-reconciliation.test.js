@@ -100,3 +100,16 @@ test.each(['event_date','event_time','location','description'])('VSA review does
  expect(prepareEvents(rows).filter(e=>e.reviewed_event_group)).toHaveLength(0);
  expect(prepareEvents(rows)).toHaveLength(2);
 });
+
+test('the same post saved twice under different link formats shows once, keeping filled-in fields',()=>{
+ const first={club_name:'msj.redcross',event_date:'10/20/2026',event_time:'',location:'Horseshoe',event_type:'Fundraiser',description:'MSJ Red Cross Club is hosting a boba fundraiser at the Horseshoe on October 20th, selling milk tea and passion fruit tea for $5.',post_url:'https://www.instagram.com/p/DeqRPxNN5B1/'};
+ const again={...first,event_time:'Lunch',description:'MSJ Red Cross is hosting a boba fundraiser at the Horseshoe on October 20th, with milk tea and passion fruit tea.',post_url:'https://www.instagram.com/msj.redcross/p/DeqRPxNN5B1/'};
+ const out=prepareEvents([first,again],[]);
+ expect(out).toHaveLength(1);expect(out[0].event_time).toBe('Lunch');
+});
+test('a spreadsheet time serial is not treated as a real time when merging duplicates',()=>{
+ const first={club_name:'msjleoclub',event_date:'10/24/2026',event_time:'12:30 PM',location:'Niles Elementary',event_type:'Volunteer',description:'MSJ Leo Club members can volunteer at the Niles Halloween Carnival.',post_url:'https://www.instagram.com/p/DeqSaonxO81/'};
+ const again={...first,event_time:'0.5208333333',description:"MSJ Leo Club's Niles Halloween Carnival on Saturday, October 24th.",post_url:'https://www.instagram.com/msjleoclub/p/DeqSaonxO81/'};
+ const out=prepareEvents([first,again],[]);
+ expect(out).toHaveLength(1);expect(out[0].event_time).toBe('12:30 PM');
+});

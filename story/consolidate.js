@@ -1,5 +1,6 @@
 // Presentation-only reconciliation: never rewrite the source spreadsheet.
 import { normalizeDate } from '../sheets-writer.js';
+import { canonicalPostUrl } from '../automation/state.js';
 const norm = x => String(x || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 const generic = new Set('weekly monthly annual regular general informational a an the for all our club meeting event activity mandatory participants to learn about happening during on in at of and this next friday monday tuesday wednesday thursday lunch school'.split(' '));
 const clubKey = x => String(x || '').trim().toLowerCase();
@@ -51,4 +52,24 @@ export function consolidateEvents(events) {
     best.location=ranked.find(e=>String(e.location||'').trim())?.location || '';
     return {...best, source_urls:[...new Set(group.map(e=>e.post_url).filter(Boolean))], source_events:group.map(e=>({...e}))};
   });
+}
+
+// A spreadsheet time serial (0.5208333333 = 12:30 PM) is a formatting accident,
+// not a time a person can read.
+const realTime = x => { const t = String(x || '').trim(); return /^\d*\.?\d+$/.test(t) ? '' : t; };
+
+// The same post saved twice (Apify and Playwright record different link
+// formats) shows once. Separate sessions from one post keep distinct explicit
+// times or rooms, so those stay apart.
+export function dedupeSamePost(events) {
+  const kept = [];
+  for (const event of events) {
+    const twin = kept.find(k => canonicalPostUrl(k.post_url) === canonicalPostUrl(event.post_url) &&
+      clubKey(k.club_name) === clubKey(event.club_name) && normalizeDate(k.event_date) === normalizeDate(event.event_date) &&
+      compatible(realTime(k.event_time), realTime(event.event_time)) && compatible(k.location, event.location));
+    if (!twin) { kept.push({ ...event, event_time: realTime(event.event_time) || event.event_time }); continue; }
+    if (!realTime(twin.event_time)) twin.event_time = realTime(event.event_time);
+    if (!String(twin.location || '').trim()) twin.location = event.location;
+  }
+  return kept;
 }

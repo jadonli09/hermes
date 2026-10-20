@@ -1,5 +1,6 @@
 // Instagram scraper module using Playwright
 import { retryWithBackoff } from './utils/retry.js';
+import { canonicalPostUrl } from './automation/state.js';
 
 const parsePositiveInt = (value, fallback) => {
   const parsed = parseInt(value, 10);
@@ -1057,6 +1058,19 @@ function randomDelay(min, max) {
 }
 
 /**
+ * Whether a post is already in the spreadsheet. Playwright records profile-
+ * prefixed links (/club/p/ID/) while Apify records /p/ID/, so compare by post.
+ * @param {Set<string>} existingUrls
+ * @param {string} postUrl
+ * @returns {boolean}
+ */
+export function isExistingPost(existingUrls, postUrl) {
+  const target = canonicalPostUrl(postUrl);
+  for (const url of existingUrls) if (canonicalPostUrl(url.trim()) === target) return true;
+  return false;
+}
+
+/**
  * Scrapes posts from a specific club's Instagram account with date range filtering and early termination
  * Implements smart scrolling with date-based filtering:
  * - Scrolls through posts chronologically (newest first)
@@ -1250,7 +1264,7 @@ export async function scrapeClubPosts(page, clubUsername, startDate, endDate, ex
         }
 
         // Check if URL already exists in spreadsheet
-        if (existingUrls.has(postUrl.trim())) {
+        if (isExistingPost(existingUrls, postUrl)) {
           duplicatesSkipped++;
           continue;
         }

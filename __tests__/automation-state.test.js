@@ -16,6 +16,10 @@ test('state survives reload, corrupt checkpoints fail closed, locks exclude over
 test('canonical URLs remove tracking and preserve shortcode case', () => {
   expect(canonicalPostUrl('https://instagram.com/reel/AbC/?igsh=secret')).toBe('https://www.instagram.com/p/AbC/');
 });
+test('profile-prefixed post links from the Playwright scraper canonicalize to the same post', () => {
+  expect(canonicalPostUrl('https://www.instagram.com/msjfilm/p/Der6OdBPARq/')).toBe('https://www.instagram.com/p/Der6OdBPARq/');
+  expect(canonicalPostUrl('https://www.instagram.com/msj.redcross/reel/DeqRPxNN5B1/?img_index=1')).toBe('https://www.instagram.com/p/DeqRPxNN5B1/');
+});
 test('cached extraction survives retry and signed-image URL changes', async () => {
   const post = { postUrl: 'https://instagram.com/p/A/', caption: 'Meeting', imageUrls: ['https://cdn.test/a.jpg?token=1'] };
   const extract = jest.fn().mockResolvedValue({ event_date: '2026-10-14' });
