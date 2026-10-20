@@ -30,53 +30,27 @@ The Mac needs network, an awake logged-in GUI session and a configured, enabled 
 
 ## Coverage and costs
 
-The user assumption is at most **one post per club per day**. Normal incremental
-runs use an exact ISO UTC `onlyPostsNewerThan` watermark and a cap based on elapsed
-Pacific calendar days: one normally, three from Thursday night to Sunday night.
-Normal retrieval activity and coverage are separate. `.hermes/pipeline-activity.json`
-records the scheduled start of the most recent successful all-account pipeline,
-even when best-effort source coverage is incomplete. A full-scope healthy manual
-pipeline also counts; failed extraction/Sheet processing, subset runs and interrupted
-refreshes do not. A successful refresh still counts if later rendering/delivery fails.
+Every night re-scans an **overlapping window**: at least the last 4 Pacific
+calendar days, with a per-club cap of 2 posts per day in the window (minimum 8).
+Posts already in the Sheet are skipped before extraction, so the overlap costs
+Apify rows but no Claude calls. A post missed once (blocked profile, late
+visibility, several posts in one day) gets about four more chances.
 
-There is **no automatic weekly backfill**. One-to-six-day gaps use the elapsed
-normal window; Sunday normally covers Thursday night's boundary through Sunday
-(Friday–Sunday activity), cap three. Seven Pacific calendar days without a
-successful pipeline trigger an **eleven-day** catch-up window. Older unresolved
-coverage does not widen this normal request; it remains in the separate ledger.
-A new account configuration or absence of trustworthy activity uses an eleven-day
-bootstrap. Existing in-progress jobs retain their immutable saved plans/actor inputs.
+A run is **source-healthy** when Instagram blocked at most 25% of the requested
+accounts. Healthy nights see 0-4 of 93 blocked; the Oct 19, 2026 outage blocked
+90. Only a source-healthy, fully processed run is recorded in
+`.hermes/pipeline-activity.json` (version 2, `sourceHealthy: true`). Older
+version-1 records and the legacy refresh checkpoint are ignored. After blocked
+or missed nights the window widens back to the last healthy run, never more
+than 11 days (cap 22). No history or a changed account list uses 11 days.
 
-Per-account coverage watermarks advance only with sufficient observed coverage
-of the original boundary. Uncertain accounts retain gapSince, including across
-narrow clean windows. Changed account scope retains unchanged accounts' boundaries
-and archives removed accounts under previousScopes. A global coverage checkpoint
-advances only when all active coverage gaps are resolved. Neither a successful
-pipeline nor a new account list silently clears gaps. Publication is qualified
-with historical-gap when the current window is clean but an older gap remains.
+The delivery email warns only on a blocked night, with the blocked count in the
+subject. Ambiguous-empty, capped and missing-handle accounts are normal and stay
+in the coverage ledger without a warning.
 
-Safe migration derives activity from scoped healthy saved jobs with refreshed=true
-and complete successful processing summaries, preserving every old job/receipt.
-Only the new activity file is written by explicit migration. Trusted legacy full
-refresh activity remains a fallback; unfinished or failed refreshes do not count as activity.
-Legacy run-log
-files do not establish a scoped checkpoint because they cannot prove the current
-account set was fully covered. An existing healthy nightly checkpoint still counts.
-Old auditAt fields are ignored; retrying an already-started job retains its saved
-input so a paid request is never silently replaced.
-All already-stored future events remain eligible for the image, regardless of how
-old their Instagram announcement is. Posts older than the backfill horizon and
-edits to already-recorded posts are not automatically rediscovered/reconciled.
-
-**Saturation is uncertain:** a 21:00-to-21:00 interval crosses two calendar days,
-so a once-per-day promise alone does not prove a one-item cap is complete. Likewise
-three weekend items could hide a late Thursday item. An exact-cap response is a
-coverage gap, with a persisted warning rather than automatic paid expansion. These conditions block strict publication; best-effort delivery retains explicit coverage warnings.
-Late-visible posts older than the incremental cutoff are not routinely re-fetched;
-a future inactivity catch-up may recover them, but no recurring reconciliation
-is performed. A guaranteed boundary overlap would require a larger cap
-or an extra paid discovery request; neither is silently enabled. No promise of
-zero rescraping.
+**Apify cost:** about $0.0027 per returned row, and every requested account
+returns at least one row, so 93 accounts cost at least $0.25 per run. A 4-day
+window adds roughly 20 post rows (about $0.30 per night).
 
 One logical job can start at most one Apify actor, capped at $2 (or a lower positive
 configured value). There are no paid POST retries or sync-to-async duplicate starts.

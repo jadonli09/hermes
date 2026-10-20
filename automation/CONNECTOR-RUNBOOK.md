@@ -53,7 +53,7 @@ raw-byte SHA-256 against the manifest, and base64url-encode without logging the
 payload or printing it to conversation. Ensure tool output isn't truncated.
 Send exactly one Gmail multipart/mixed message using the manifest's linkId,
 from, to, subject. Include manifest.requiredBodyText verbatim when nonempty and
-explain coverage.gaps without claiming missing content is proven. Text body identifies
+say how many clubs Instagram blocked (coverage.blocked of coverage.requested) without claiming specific events are missing. requiredBodyText is empty on healthy nights; do not add a coverage warning then. Text body identifies
 targetDate, with all image/png attachments
 in manifest order and exact filenames. Do not add other recipients or files.
 Do not send if any manifest check fails. Do not call the Apple Mail adapter.

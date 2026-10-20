@@ -48,16 +48,25 @@ test('receipt is idempotent, conflicting or wrong-token receipt rejected; hashes
  expect(readState(jobFile).status).toBe('sent');expect(()=>claim(root,id,now)).toThrow(/Already claimed/);
 });
 
-test('partial coverage claim binds warning into subject and required body',()=>{
- const job=readState(jobFile);job.coverageReport={complete:false,accounts:{bad:{status:'blocked'}}};writeState(jobFile,job);
+const accounts=(b,total)=>Object.fromEntries(Array.from({length:total},(_,i)=>[`a${i}`,i<b?{status:'blocked',complete:false,reasons:['blocked']}:{status:'ambiguous-empty',complete:false,reasons:['ambiguous-empty']}]));
+const blockedWarningText='Instagram blocked the scraper for 90 of 93 clubs tonight, so their newest posts may be missing from these images. The next nightly run automatically re-checks at least the last 4 days.';
+test('blocked night binds a specific warning into subject and required body',()=>{
+ const job=readState(jobFile);job.coverageReport={complete:false,accounts:accounts(90,93)};writeState(jobFile,job);
  const result=claim(root,id,now);
- expect(result.manifest.subject).toContain('refresh incomplete');
- expect(result.manifest.requiredBodyText).toContain('newer events may be missing');
+ expect(result.manifest.subject).toBe('Hermes 2026-10-19 [night-2026-10-18] — scrape blocked for 90 of 93 clubs');
+ expect(result.manifest.requiredBodyText).toBe(blockedWarningText);
+ expect(result.manifest.coverage).toMatchObject({healthy:false,blocked:90,requested:93});
+});
+test('healthy night with ordinary empty accounts sends no warning',()=>{
+ const job=readState(jobFile);job.coverageReport={complete:false,accounts:accounts(4,93)};writeState(jobFile,job);
+ const result=claim(root,id,now);
+ expect(result.manifest.subject).toBe('Hermes 2026-10-19 [night-2026-10-18]');
+ expect(result.manifest.requiredBodyText).toBe('');
 });
 test('qualified receipt cannot verify unless the received email body includes the warning',()=>{
- const job=readState(jobFile);job.coverageReport={complete:false,accounts:{bad:{complete:false,status:'blocked'}}};writeState(jobFile,job);
+ const job=readState(jobFile);job.coverageReport={complete:false,accounts:accounts(90,93)};writeState(jobFile,job);
  const {claimToken,manifest}=claim(root,id,now);acknowledge(root,id,claimToken,'abc123');
  const evidence={messageId:'abc123',from:ADDRESS,to:ADDRESS,subject:manifest.subject,labels:['SENT','INBOX'],attachments:manifest.files.map(({filename,mimeType,size,sha256})=>({filename,mimeType,size,sha256}))};
  expect(()=>verify(root,id,claimToken,evidence)).toThrow(/warning/);
- expect(verify(root,id,claimToken,{...evidence,bodyText:'Refresh incomplete; newer events may be missing.'}).status).toBe('verified');
+ expect(verify(root,id,claimToken,{...evidence,bodyText:blockedWarningText}).status).toBe('verified');
 });

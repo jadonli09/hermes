@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { COVERAGE_WARNING } from './coverage.js';
-import { runNightly, slotFor } from './nightly.js';
+import { sourceHealth, blockedWarning } from './coverage.js';
+import { runNightly, slotFor, LOOKBACK_DAYS } from './nightly.js';
 import { digest, readState, writeState, lock } from './state.js';
 export const ADDRESS = 'ai.jadonli09@gmail.com';
 export const LINK = 'link_6ac224b8c2208191b3e218955d418956';
@@ -23,9 +23,12 @@ function manifest(root, id, job) {
     if (digest(data.toString('base64')) !== image.sha256 || data.length < 24 || data.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a' || data.readUInt32BE(16) !== 1080 || data.readUInt32BE(20) !== 1920) throw Error('Image integrity mismatch');
     return { path: real, filename: expected, mimeType: 'image/png', size: data.length, sha256: sha(data) };
   });
-  const incomplete = job.coverageReport?.complete === false;
+  // Warn only when Instagram blocked the scrape. Empty and capped accounts are
+  // normal every night, and a warning on every email is one nobody reads.
+  const report = job.observedCoverageReport || job.coverageReport;
+  const health = report ? (job.sourceHealth || sourceHealth(report)) : { healthy: true, blocked: 0, requested: 0 };
   const gaps = Object.entries(job.coverageReport?.accounts || {}).filter(([,v])=>!v.complete).map(([name,v])=>({name,status:v.status,reasons:v.reasons || []}));
-  const result = { version: 1, jobId: id, targetDate: job.slot.targetDate, cutoff: job.slot.cutoff, from: ADDRESS, to: ADDRESS, linkId: LINK, subject: `Hermes ${job.slot.targetDate} [night-${id}]${incomplete ? ' — refresh incomplete; newer events may be missing' : ''}`, requiredBodyText: incomplete ? COVERAGE_WARNING : '', coverage: {complete:!incomplete,gaps}, files };
+  const result = { version: 1, jobId: id, targetDate: job.slot.targetDate, cutoff: job.slot.cutoff, from: ADDRESS, to: ADDRESS, linkId: LINK, subject: `Hermes ${job.slot.targetDate} [night-${id}]${health.healthy ? '' : ` — scrape blocked for ${health.blocked} of ${health.requested} clubs`}`, requiredBodyText: health.healthy ? '' : blockedWarning(health, LOOKBACK_DAYS), coverage: {...health,gaps}, files };
   return { ...result, manifestHash: digest(result) };
 }
 function transaction(root, id, fn) {
