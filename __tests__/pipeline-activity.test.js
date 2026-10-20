@@ -44,8 +44,8 @@ test('account change bootstraps while retaining unchanged gaps and archiving rem
  expect(next.accounts.good.gapSince).toBe(prior.accounts.good.gapSince);expect(next.previousScopes[0].accounts.removed).toEqual(prior.accounts.removed);
 });
 test('healthy full-scope manual processing counts despite source gaps; failed/subset processing does not',()=>{
- expect(recordPipelineActivity(root,{startedAt:'2026-10-19T04:00:00Z',scope,summary,allAccountsProcessed:true})).toBe(true);
- for(const args of [{summary:{...summary,clubsFailed:1},allAccountsProcessed:true},{summary,allAccountsProcessed:false}]) expect(recordPipelineActivity(root,{startedAt:'2026-10-20T04:00:00Z',scope,...args})).toBe(false);
+ expect(recordPipelineActivity(root,{startedAt:'2026-10-19T04:00:00Z',scope,summary,allAccountsProcessed:true,sourceHealthy:true})).toBe(true);
+ for(const args of [{summary:{...summary,clubsFailed:1},allAccountsProcessed:true,sourceHealthy:true},{summary,allAccountsProcessed:false,sourceHealthy:true},{summary,allAccountsProcessed:true,sourceHealthy:false},{summary,allAccountsProcessed:true}]) expect(recordPipelineActivity(root,{startedAt:'2026-10-20T04:00:00Z',scope,...args})).toBe(false);
  expect(latestPipelineActivity(root,scope).coveredFrom).toBe('2026-10-19T04:00:00Z');
 });
 test('historical gaps continue to qualify a clean narrow observed report',()=>{
@@ -62,4 +62,27 @@ test('new healthy best-effort execution records activity yet preserves historica
  expect(readState(path.join(root,'.hermes/pipeline-activity.json')).coveredFrom).toBe('2026-10-20T04:00:00.000Z');
  const job=readState(path.join(root,'.hermes/nightly/2026-10-19/job.json'));expect(job.observedCoverageReport.complete).toBe(true);expect(job.coverageReport.complete).toBe(false);expect(readState(ledger).accounts.good.gapSince).toBe(pacificInstant('2026-10-03'));
  expect(readState(path.join(root,'.hermes/nightly/checkpoint.json'))).toBeNull();
+});
+
+const blockedReport=(b,total)=>({version:2,complete:false,accounts:Object.fromEntries(Array.from({length:total},(_,i)=>[`a${i}`,i<b?{status:'blocked',complete:false,reasons:['blocked']}:{status:'observed-window',complete:true,reasons:[]}]))});
+test('blocked run is not recorded as activity',()=>{
+ expect(recordPipelineActivity(root,{startedAt:'2026-10-20T04:00:00Z',scope,summary,allAccountsProcessed:true,sourceHealthy:false})).toBe(false);
+ expect(fs.existsSync(path.join(root,'.hermes/pipeline-activity.json'))).toBe(false);
+});
+test('stale v1 activity from a blocked night does not narrow the window',()=>{
+ writeState(path.join(root,'.hermes/pipeline-activity.json'),{version:1,scope,coveredFrom:'2026-10-20T04:00:00.000Z',sourceJob:'2026-10-19'});
+ saved('2026-10-18',{coverageReport:blockedReport(4,93)});saved('2026-10-19',{coverageReport:blockedReport(90,93),observedCoverageReport:blockedReport(90,93)});
+ expect(latestPipelineActivity(root,scope).coveredFrom).toBe(pacificInstant('2026-10-18',21));
+});
+test('job without a coverage report never counts as healthy activity',()=>{
+ saved('2026-10-18',{coverageReport:undefined});expect(latestPipelineActivity(root,scope)).toBeNull();
+});
+test('blocked nightly still renders but does not advance activity',async()=>{
+ saved('2026-10-18');
+ const child=jest.fn(async(script)=>script==='main.js'?[{t:'summary',summary},{t:'coverage',report:blockedReport(90,93)}]:[{t:'story:done',date:'2026-10-20',pages:0,files:[]}]);
+ const result=await runNightly({projectDir:root,now:()=>new Date('2026-10-20T04:00:00Z'),execute:true,coverageMode:'best-effort',child});
+ expect(result.status).toBe('empty');
+ const job=readState(path.join(root,'.hermes/nightly/2026-10-19/job.json'));expect(job.sourceHealth).toEqual({healthy:false,blocked:90,requested:93});
+ expect(readState(path.join(root,'.hermes/pipeline-activity.json'))).toBeNull();
+ expect(latestPipelineActivity(root,scope).coveredFrom).toBe(pacificInstant('2026-10-18',21));
 });

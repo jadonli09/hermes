@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { digest, readState, writeState, lock } from './state.js';
 import { refreshScope } from './refresh-activity.js';
 import { latestPipelineActivity, recordPipelineActivity, healthyPipeline } from './pipeline-activity.js';
-import { advanceAccounts, qualifyOutstandingGaps } from './coverage.js';
+import { advanceAccounts, qualifyOutstandingGaps, sourceHealth } from './coverage.js';
 import { sendEmail, validateEmailConfig } from './email.js';
 
 export const ZONE = 'America/Los_Angeles';
@@ -140,7 +140,9 @@ export async function runNightly({ projectDir, now = () => new Date(), execute =
         writeState(jobFile, job);
       }
       if (job.coverageReport?.complete || (!job.coverageReport && coverageMode === 'strict')) writeState(checkpointFile, { scope, coveredFrom: slot.scheduledAt });
-      recordPipelineActivity(projectDir,{startedAt:slot.scheduledAt,scope,summary:job.summary,allAccountsProcessed:true,sourceJob:slot.night});
+      // A night Instagram blocked must not move the next window forward.
+      job.sourceHealth = sourceHealth(observed); writeState(jobFile, job);
+      recordPipelineActivity(projectDir,{startedAt:slot.scheduledAt,scope,summary:job.summary,allAccountsProcessed:true,sourceHealthy:job.sourceHealth.healthy,sourceJob:slot.night});
       if (coverageMode === 'strict' && job.coverageReport && !job.coverageReport.complete) throw Error('Strict coverage incomplete: unresolved historical gaps');
     }
     if (Date.parse(now()) >= Date.parse(slot.cutoff)) throw new Error('Delivery window expired; saved refresh can still support the next job');
