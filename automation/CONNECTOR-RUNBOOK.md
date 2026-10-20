@@ -119,15 +119,15 @@ narrower window cannot clear an older gap. Scope changes preserve unchanged
 accounts' gaps and archive removed-account history. This ledger does NOT determine
 the ordinary actor's retrieval window.
 
-Normal planning uses .hermes/pipeline-activity.json: the last successful full-account
-processing START, regardless of best-effort coverage uncertainty. Healthy saved jobs
-can safely supply this activity without rewriting them. Failed/interrupted refreshes
-and subset runs cannot supply activity; a completed refresh followed by a rendering
-or delivery failure can. Normal cap is one daily, three on Sunday (Friday–Sunday
-activity from Thursday's scheduled boundary). One-to-six-day inactivity uses the
-actual gap. Seven days without a successful pipeline triggers eleven-day catch-up;
-new account scope/no trustworthy activity triggers eleven-day bootstrap. There is
-no weekly backfill and no automatic widening to the oldest historical gap.
+Normal planning uses .hermes/pipeline-activity.json (version 2): the START of the
+last full-account run that was source-healthy, meaning Instagram blocked at most 25%
+of requested accounts. A blocked night is never recorded as activity, and
+version-1 records are ignored. Every night re-scans at least the last 4 Pacific days
+(cap 2 posts per day in the window, minimum 8). After blocked or missed nights the
+window widens back to the last healthy run, never more than 11 days (cap 22). New
+account scope or no trustworthy activity uses 11 days. Failed/interrupted refreshes
+and subset runs cannot supply activity; a healthy completed refresh followed by a
+rendering or delivery failure can.
 
 Existing jobs retain saved plans and original paid actor inputs. No migration may
 rewrite sent/verified records, paid intents, coverage history or delivery claims.
@@ -137,16 +137,16 @@ no extra budget. The $2 actor ceiling and separate Claude usage remain unchanged
 For NEW jobs, observedCoverageReport retains the actual current-window evidence.
 coverageReport additionally qualifies unresolved historical gaps for publication.
 A historical-gap means a clean latest window did not recover its older boundary;
-it is not a newly blocked request. Include this category when explaining manifest
-coverage.gaps. Never suppress the required warning merely because the latest
-observed report is clean. Strict publication still blocks unresolved coverage.
+it is not a newly blocked request. Historical gaps and ambiguous-empty accounts are
+normal and do NOT warrant an email warning. Strict publication still blocks
+unresolved coverage.
 
-Only fully covered reports advance the global coverage checkpoint. Successful
-full-account pipeline activity advances separately. Partial runs save pipeline completion and render the Sheet's target-day
-images, but manifest subject/body MUST say: refresh incomplete; newer events may
-be missing. Exact body warning is manifest.requiredBodyText. Verify saves actual
-received bodyText in evidence, alongside attachment verification. Report incomplete
-coverage to the parent; it is a qualified delivery, not verified full coverage.
+The email warns only on a blocked night. Then the manifest subject ends with
+"— scrape blocked for N of M clubs" and manifest.requiredBodyText holds the exact
+warning; include it verbatim. On healthy nights requiredBodyText is empty: add no
+coverage warning to the subject or body. Never alter manifest.subject. Verify saves
+actual received bodyText in evidence, alongside attachment verification. Report a
+blocked night to the parent as a qualified delivery.
 
 Strict mode remains available with coverageMode="strict" in the same config;
 it blocks reports with any unresolved coverage uncertainty. Do not change an
