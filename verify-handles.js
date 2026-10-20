@@ -12,7 +12,7 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { runActor } from './scrapers/apify-client.js';
+import { runActor, acknowledgeActorRun } from './scrapers/apify-client.js';
 
 dotenv.config();
 
@@ -66,6 +66,8 @@ async function main() {
       ? parseFloat(process.env.APIFY_MAX_CHARGE_USD)
       : 5
   });
+
+  acknowledgeActorRun(PROFILE_ACTOR, { usernames: handles });
 
   const found = new Map();
   for (const item of items) {

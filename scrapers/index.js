@@ -47,6 +47,8 @@ export function createScraperBackend(config) {
   return {
     name,
     requiresBrowser: false,
+    acknowledge: () => scraper.acknowledge(),
+    getCoverage: () => scraper.coverage,
     prefetch: (usernames, startDate) => scraper.prefetch(usernames, startDate),
     scrapeClubPosts: (page, club, start, end, existing) =>
       scraper.scrapeClubPosts(page, club, start, end, existing)

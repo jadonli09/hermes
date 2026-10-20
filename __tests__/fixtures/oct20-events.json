@@ -1,0 +1,52 @@
+[
+  {
+    "club_name": "msj.vsa",
+    "event_date": "10/20/2026",
+    "event_time": "Lunch",
+    "event_type": "Competition",
+    "location": "P6",
+    "post_url": "https://www.instagram.com/p/DeisQDGm1OP/",
+    "confidence": "0.95",
+    "description": "Vietnamese trivia competition during lunch in P6 with a free Vietnamese coffee prize for the winner."
+  },
+  {
+    "club_name": "msjnaadam_",
+    "event_date": "10/20/2026",
+    "event_time": "Lunch",
+    "event_type": "Club Meeting",
+    "location": "E2B",
+    "post_url": "https://www.instagram.com/p/DeqWHRXvzMz/",
+    "confidence": "0.95",
+    "description": "A club meeting on Tuesday 10/20 during lunch in room E2B (Ms. KC/Rivera's class) featuring free samosas and a discussion on the similarities and differences between Hindustani and Carnatic music."
+  },
+  {
+    "club_name": "msj.mun",
+    "event_date": "10/20/2026",
+    "event_time": "23:59",
+    "event_type": "Spirit Day",
+    "location": "",
+    "post_url": "https://www.instagram.com/p/DealHioGod8/",
+    "confidence": "0.9",
+    "description": "NHSMUN 2027 application deadline (apply at tinyurl.com/nhsmun2026)"
+  },
+  {
+    "club_name": "msj.vsa",
+    "event_date": "10/20/2026",
+    "event_time": "",
+    "event_type": "Competition",
+    "location": "P6",
+    "post_url": "https://www.instagram.com/p/DemfoibMMuh/",
+    "confidence": "0.8",
+    "description": "Join the Vietnamese trivia event in P6 on Tuesday 10/20 for a chance to win Vietnamese coffee (Ca Phe)."
+  },
+  {
+    "club_name": "msj.redcross",
+    "event_date": "10/20/2026",
+    "event_time": "",
+    "event_type": "Fundraiser",
+    "location": "Horseshoe",
+    "post_url": "https://www.instagram.com/p/DeqRPxNN5B1/",
+    "confidence": "0.9",
+    "description": "MSJ Red Cross Club is hosting a boba fundraiser at the Horseshoe on October 20th, selling milk tea and passion fruit tea for $5."
+  }
+]

@@ -1,0 +1,95 @@
+[
+  {
+    "match": {
+      "club_name": "msjaviationclub",
+      "event_date": "10/16/2026",
+      "event_time": "Lunch",
+      "event_type": "Club Meeting",
+      "location": "P3",
+      "post_url": "https://www.instagram.com/p/DegKdoZp7ln/",
+      "description": "Aviation Club Week 14 meeting covering Basic Instruments Part 1 in room P3."
+    },
+    "set": {
+      "event_time": "Lunch"
+    },
+    "reason": "Jadon confirmed with Aviation Club that this October 16, 2026 meeting is at Lunch. User confirmation supersedes prior unspecified-time review for this exact event only; no default applies to other events."
+  },
+  {
+    "match": {
+      "club_name": "msjhs_2030",
+      "event_date": "10/16/2026",
+      "event_time": "",
+      "event_type": "Event",
+      "location": "C120",
+      "post_url": "https://www.instagram.com/p/DedENX1md1C/",
+      "description": "Link Committee is hosting a Freshmen Advice Panel on October 16th in C120 during students' health/ethnic studies period."
+    },
+    "set": {
+      "event_time": "Health/ethnic studies period"
+    },
+    "reason": "Source caption explicitly specifies students' health/ethnic studies period. Reviewed 2026-10-16."
+  },
+  {
+    "match": {
+      "club_name": "msjstempac",
+      "event_date": "10/16/2026",
+      "event_time": "Lunch",
+      "event_type": "Workshop",
+      "location": "C14",
+      "post_url": "https://www.instagram.com/p/DehNtL6qubJ/",
+      "description": "STEM-PAC's Workshop #1 on research project brainstorming, with mini activities and free donuts, held at lunch in C14 on Friday, October 16, 2026."
+    },
+    "set": {
+      "presentation_order": -1
+    },
+    "reason": "Jadon requested STEM-PAC first in the October 16, 2026 edition only. Other events and future editions retain normal ordering."
+  },
+  {
+    "match": {
+      "club_name": "msjbeautification",
+      "event_date": "10/19/2026",
+      "event_time": "",
+      "event_type": "Fundraiser",
+      "location": "Horseshoe",
+      "post_url": "https://www.instagram.com/p/DeltuT4vmuc/",
+      "confidence": "0.9",
+      "description": "MSJ Beautification is selling Chick-fil-A Mac and Cheese bowls for $5 each in the Horseshoe on Monday, October 19th."
+    },
+    "set": {
+      "event_time": "Lunch"
+    },
+    "reason": "Jadon confirmed on October 19, 2026: \u201cfor today\u2019s, the fundraiser is lunch as well.\u201d Applies only to MSJ Beautification\u2019s October 19 Chick-fil-A Mac and Cheese fundraiser at the Horseshoe, Instagram post DeltuT4vmuc. Exact-event presentation correction; other fundraiser events unchanged."
+  },
+  {
+    "match": {
+      "club_name": "msj.vsa",
+      "event_date": "10/20/2026",
+      "event_time": "Lunch",
+      "event_type": "Competition",
+      "location": "P6",
+      "post_url": "https://www.instagram.com/p/DeisQDGm1OP/",
+      "confidence": "0.95",
+      "description": "Vietnamese trivia competition during lunch in P6 with a free Vietnamese coffee prize for the winner."
+    },
+    "set": {
+      "reviewed_event_group": "msj-vsa-2026-10-20-viet-trivia-p6"
+    },
+    "reason": "Reviewed saved source captions on 2026-10-20: both VSA posts invite students to Vietnamese trivia on Tuesday October 20 in P6 with a Vietnamese coffee prize. DeisQDGm1OP explicitly states Lunch; DemfoibMMuh repeats the same event without a time. Exact-source-row duplicate reconciliation only; preserve both post URLs and original rows."
+  },
+  {
+    "match": {
+      "club_name": "msj.vsa",
+      "event_date": "10/20/2026",
+      "event_time": "",
+      "event_type": "Competition",
+      "location": "P6",
+      "post_url": "https://www.instagram.com/p/DemfoibMMuh/",
+      "confidence": "0.8",
+      "description": "Join the Vietnamese trivia event in P6 on Tuesday 10/20 for a chance to win Vietnamese coffee (Ca Phe)."
+    },
+    "set": {
+      "reviewed_event_group": "msj-vsa-2026-10-20-viet-trivia-p6"
+    },
+    "reason": "Reviewed saved source captions on 2026-10-20: both VSA posts invite students to Vietnamese trivia on Tuesday October 20 in P6 with a Vietnamese coffee prize. DeisQDGm1OP explicitly states Lunch; DemfoibMMuh repeats the same event without a time. Exact-source-row duplicate reconciliation only; preserve both post URLs and original rows."
+  }
+]

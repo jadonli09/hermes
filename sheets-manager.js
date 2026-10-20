@@ -52,6 +52,7 @@ export class SheetsManager {
       this.existingPostUrls = await getExistingPostUrls(this.sheets, this.spreadsheetId);
       console.log(`✓ Loaded ${this.existingPostUrls.size} existing post URL(s) for deduplication`);
     } catch (error) {
+      if (process.env.HERMES_STRICT_REFRESH === 'true') throw error;
       console.error(`Error loading existing post URLs: ${error.message}`);
       console.warn('Continuing with empty URL set (will check all posts)');
       this.existingPostUrls = new Set();
@@ -74,6 +75,7 @@ export class SheetsManager {
       const totalEvents = Array.from(this.existingEvents.values()).reduce((sum, arr) => sum + arr.length, 0);
       console.log(`✓ Loaded ${totalEvents} existing event(s) for update comparison (${this.existingEvents.size} unique post URLs)`);
     } catch (error) {
+      if (process.env.HERMES_STRICT_REFRESH === 'true') throw error;
       console.warn(`Warning: Could not load existing events: ${error.message}`);
       console.warn('Continuing with update/append (will treat all as new)');
       this.existingEvents = null;
@@ -163,6 +165,7 @@ export class SheetsManager {
       });
       return true;
     } catch (error) {
+      if (process.env.HERMES_STRICT_REFRESH === 'true') throw error;
       console.error(`Spreadsheet connection validation failed: ${error.message}`);
       return false;
     }

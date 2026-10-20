@@ -5,6 +5,7 @@
 // event is very much happening.
 import { authenticateSheets, normalizeDate } from '../sheets-writer.js';
 import { retryWithBackoff } from '../utils/retry.js';
+import { prepareEvents } from './prepare-events.js';
 
 // A=club_name B=event_date C=event_time D=event_type E=location
 // F=post_url G=posted_date H=confidence I=description J=last_updated
@@ -97,5 +98,5 @@ export function eventsOnDate(events, isoDate) {
 export async function fetchEventsForDate(credentialsPath, spreadsheetId, isoDate) {
   const sheets = await authenticateSheets(credentialsPath);
   const all = await readAllEvents(sheets, spreadsheetId);
-  return eventsOnDate(all, isoDate);
+  return prepareEvents(eventsOnDate(all, isoDate));
 }

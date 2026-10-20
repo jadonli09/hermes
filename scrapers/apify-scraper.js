@@ -6,7 +6,10 @@
 // every username in a single actor run. We therefore fetch once up front and
 // serve each club from that cache, which keeps the per-club contract - and every
 // caller downstream of it - identical.
-import { runActor } from './apify-client.js';
+import { classifyCoverage } from '../automation/coverage.js';
+import { emit } from '../utils/progress-events.js';
+import { canonicalPostUrl } from '../automation/state.js';
+import { runActor, acknowledgeActorRun } from './apify-client.js';
 import { isIntroPost } from '../scraper.js';
 
 /**
@@ -48,7 +51,7 @@ export function normalizeApifyPost(item) {
   const accountName = accountFromInputUrl(item.inputUrl) || item.ownerUsername || null;
 
   return {
-    postUrl,
+    postUrl: canonicalPostUrl(postUrl),
     imageUrls: images,
     caption: item.caption || null,
     accountName,
@@ -86,7 +89,7 @@ export class ApifyScraper {
     const input = {
       username: usernames,
       resultsLimit: this.resultsLimit,
-      onlyPostsNewerThan: toActorDate(startDate),
+      onlyPostsNewerThan: process.env.HERMES_FETCH_SINCE || toActorDate(startDate),
 
       // Pinned posts are returned like any other post and count against
       // resultsLimit, and onlyPostsNewerThan is documented as not applying to
@@ -95,6 +98,8 @@ export class ApifyScraper {
       // Dropping them actor-side means we pay for ten real posts instead.
       skipPinnedPosts: true
     };
+
+    this.lastInput = input;
 
     // Cap billed items at the theoretical maximum this input can return, so a
     // misconfigured resultsLimit cannot run away with the budget
@@ -105,14 +110,23 @@ export class ApifyScraper {
       actorId: this.actorId,
       input,
       maxItems,
-      maxTotalChargeUsd: this.maxTotalChargeUsd
+      maxTotalChargeUsd: this.maxTotalChargeUsd,
+      onDiagnostics: value => { this.actorDiagnostics = value; }
     });
+    this.coverage = classifyCoverage(items, usernames, this.resultsLimit, this.actorDiagnostics);
+    emit('coverage', { report: this.coverage });
 
+    if (process.env.HERMES_STRICT_REFRESH === 'true' && items.some(item => item?.error || item?.errorDescription)) {
+      throw new Error('Apify returned account errors; refusing incomplete refresh');
+    }
+    this.postsByAccount.clear();
+    const seen = new Set();
+    const dayCounts = new Map();
     let normalized = 0;
     let skipped = 0;
 
     for (const item of items) {
-      const post = normalizeApifyPost(item);
+      const post = item?.error || item?.errorDescription ? null : normalizeApifyPost(item);
 
       if (!post || !post.accountName) {
         skipped++;
@@ -120,6 +134,12 @@ export class ApifyScraper {
       }
 
       const key = post.accountName.toLowerCase();
+      const identity = `${key}:${post.postUrl}`;
+      if (seen.has(identity)) continue;
+      seen.add(identity);
+      const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(item.timestamp));
+      const dayKey = `${key}:${day}`;
+      dayCounts.set(dayKey, (dayCounts.get(dayKey) || 0) + 1);
       if (!this.postsByAccount.has(key)) {
         this.postsByAccount.set(key, []);
       }
@@ -127,7 +147,17 @@ export class ApifyScraper {
       normalized++;
     }
 
+    if (process.env.HERMES_STRICT_REFRESH === 'true') {
+      if (skipped) throw new Error('Apify returned unusable rows; refusing incomplete refresh');
+      if ([...this.postsByAccount.values()].some(posts => posts.length > this.resultsLimit)) throw new Error('Actor exceeded requested per-profile cap; review coverage');
+      const saturated = [...this.postsByAccount].filter(([, posts]) => posts.length === this.resultsLimit).map(([name]) => name);
+      if (saturated.length) {
+        console.warn(`Coverage relies on the configured one-post-per-day assumption for ${saturated.length} capped account(s); no automatic paid expansion`);
+        emit('coverage', { assumedDailyLimit: 1, cappedAccounts: saturated, completenessVerified: false });
+      }
+    }
     this.prefetched = true;
+    if (!this.coverage.complete) console.warn(`Coverage incomplete: ${Object.values(this.coverage.accounts).filter(x=>!x.complete).length}/${usernames.length} accounts have gaps; valid posts remain usable in best-effort mode.`);
 
     console.log(`✓ Apify returned ${items.length} item(s): ${normalized} usable, ${skipped} unusable`);
     console.log(`✓ Covering ${this.postsByAccount.size}/${usernames.length} requested account(s)`);
@@ -148,6 +178,10 @@ export class ApifyScraper {
    *
    * @param {null} _page - Unused; kept so the two backends are interchangeable
    */
+  acknowledge() {
+    if (this.lastInput) acknowledgeActorRun(this.actorId, this.lastInput);
+  }
+
   async scrapeClubPosts(_page, clubUsername, startDate, endDate, existingUrls = new Set()) {
     if (!this.prefetched) {
       throw new Error('ApifyScraper.prefetch() must be called before scrapeClubPosts()');
@@ -162,8 +196,9 @@ export class ApifyScraper {
     const startDay = Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), startDate.getUTCDate());
     const endDay = Date.UTC(endDate.getUTCFullYear(), endDate.getUTCMonth(), endDate.getUTCDate());
 
+    const known = new Set([...existingUrls].map(canonicalPostUrl));
     for (const post of posts) {
-      if (existingUrls.has(post.postUrl.trim())) {
+      if (known.has(canonicalPostUrl(post.postUrl))) {
         duplicatesSkipped++;
         continue;
       }

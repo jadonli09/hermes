@@ -1,0 +1,82 @@
+[
+  {
+    "club_name": "msjclimbingclub",
+    "event_date": "10/16/2026",
+    "event_time": "Lunch",
+    "event_type": "Activity",
+    "location": "BTQ",
+    "post_url": "https://www.instagram.com/p/DeYjBkjI3Gg/",
+    "confidence": "0.85",
+    "description": "Pinchblock Challenge at BTQ, longest time wins"
+  },
+  {
+    "club_name": "msjrelayforlife",
+    "event_date": "10/16/2026",
+    "event_time": "",
+    "event_type": "Event",
+    "location": "C120",
+    "post_url": "https://www.instagram.com/p/DeSDuDsGoly/",
+    "confidence": "1",
+    "description": "Kickoff Meeting"
+  },
+  {
+    "club_name": "msjrelayforlife",
+    "event_date": "10/16/2026",
+    "event_time": "Lunch",
+    "event_type": "Club Meeting",
+    "location": "C120",
+    "post_url": "https://www.instagram.com/p/DeTKBbolAy9/",
+    "confidence": "0.98",
+    "description": "Mandatory kickoff meeting for all Relay For Life participants to learn about RFL, happening during lunch in C120 on Friday, October 16."
+  },
+  {
+    "club_name": "msjcivicsclub",
+    "event_date": "10/16/2026",
+    "event_time": "Lunch",
+    "event_type": "Volunteer",
+    "location": "M2",
+    "post_url": "https://www.instagram.com/p/Defn29OPPZQ/",
+    "confidence": "0.95",
+    "description": "MSJ Civics Club and Youth Voter Movement are hosting a postcard-sorting volunteer event for service hours during lunch in room M2 on Friday, October 16."
+  },
+  {
+    "club_name": "msjhs_2030",
+    "event_date": "10/16/2026",
+    "event_time": "",
+    "event_type": "Event",
+    "location": "C120",
+    "post_url": "https://www.instagram.com/p/DedENX1md1C/",
+    "confidence": "0.9",
+    "description": "Link Committee is hosting a Freshmen Advice Panel on October 16th in C120 during students' health/ethnic studies period."
+  },
+  {
+    "club_name": "msjbio",
+    "event_date": "10/16/2026",
+    "event_time": "Lunch",
+    "event_type": "Club Meeting",
+    "location": "P10",
+    "post_url": "https://www.instagram.com/p/DeiI6VxB8m0/",
+    "confidence": "0.95",
+    "description": "MSJ Biology Club is hosting a neurophysiology lecture covering signaling and nervous system structure during lunch in P10 on Friday, 10/16/26."
+  },
+  {
+    "club_name": "msjaviationclub",
+    "event_date": "10/16/2026",
+    "event_time": "Lunch",
+    "event_type": "Club Meeting",
+    "location": "P3",
+    "post_url": "https://www.instagram.com/p/DegKdoZp7ln/",
+    "confidence": "0.9",
+    "description": "Aviation Club Week 14 meeting covering Basic Instruments Part 1 in room P3."
+  },
+  {
+    "club_name": "msjstempac",
+    "event_date": "10/16/2026",
+    "event_time": "Lunch",
+    "event_type": "Workshop",
+    "location": "C14",
+    "post_url": "https://www.instagram.com/p/DehNtL6qubJ/",
+    "confidence": "0.98",
+    "description": "STEM-PAC's Workshop #1 on research project brainstorming, with mini activities and free donuts, held at lunch in C14 on Friday, October 16, 2026."
+  }
+]

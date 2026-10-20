@@ -131,6 +131,8 @@ async function main() {
 
   if (outDir) {
     fs.mkdirSync(outDir, { recursive: true });
+    // Reviewable provenance, separate from the PNG-only delivery manifest.
+    fs.writeFileSync(path.join(outDir, `story-${isoDate}-events.json`), JSON.stringify(events, null, 2));
     for (const [i, buffer] of images.entries()) {
       const name = `story-${isoDate}-p${i + 1}.png`;
       const file = path.join(outDir, name);

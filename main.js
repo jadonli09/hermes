@@ -1,5 +1,9 @@
 // Main orchestrator for Instagram scraping, AI processing, and Google Sheets integration
+import { recordPipelineActivity } from './automation/pipeline-activity.js';
 import path from 'path';
+import { assertNoPendingAppend } from './automation/sheets-append.js';
+import { lock } from './automation/state.js';
+import { refreshScope, recordRefreshActivity } from './automation/refresh-activity.js';
 import { fileURLToPath } from 'url';
 
 // Module imports
@@ -27,14 +31,21 @@ const __dirname = path.dirname(__filename);
 async function main() {
   let browserManager = null;
   let progress = null;
+  let release = null;
+  const startedAt = new Date().toISOString();
+  const scope = refreshScope(__dirname);
 
   try {
     console.log('='.repeat(60));
     console.log('Starting Instagram Club Scraper');
     console.log('='.repeat(60));
 
+    release = lock(path.join(__dirname, '.hermes/pipeline.lock'));
+    process.once('exit', () => { if (release) { release(); release = null; } });
+
     // Load and validate configuration
     const config = loadConfig();
+    assertNoPendingAppend();
     console.log('✓ Environment variables loaded');
     console.log(`✓ Scraping posts from: ${config.startDateStr} onwards`);
 
@@ -215,6 +226,18 @@ async function main() {
       console.warn('='.repeat(60));
     }
 
+    const summary = metrics.getSummary();
+    if (process.env.HERMES_STRICT_REFRESH === 'true' &&
+        (summary.clubsFailed > 0 || summary.totalExtractionErrors > 0)) {
+      throw new Error('Partial refresh failure; refusing scheduled publication');
+    }
+    scraperBackend.acknowledge?.();
+    recordRefreshActivity(__dirname, { startedAt, scope, summary,
+      fullCoverage: (scraperBackend.name !== 'apify' || scraperBackend.getCoverage?.()?.complete === true) && !config.category && clubsToProcess.length === allAccounts.length });
+
+    if (!process.env.HERMES_APIFY_STATE) recordPipelineActivity(__dirname, { startedAt, scope, summary,
+      allAccountsProcessed: !config.category && clubsToProcess.length === allAccounts.length });
+
     // Print final success message
     metrics.printFinalSuccess();
 
@@ -246,6 +269,8 @@ async function main() {
     }
 
     process.exit(1);
+  } finally {
+    if (release) { release(); release = null; }
   }
 }
 

@@ -1,6 +1,7 @@
 // Club processor for handling single club scraping and AI processing
 import { scrapeClubPosts as defaultScrapeClubPosts } from './scraper.js';
-import { processPostWithClaude } from './ai-processor.js';
+import { cachedExtraction } from './automation/extraction-cache.js';
+import { processPostWithClaude, getConfiguredModels } from './ai-processor.js';
 import { saveProgress } from './utils/progress.js';
 
 /**
@@ -119,11 +120,12 @@ export async function processClub(options) {
 
         // Process post with Claude (pass page for image fetching)
         // May return single object OR array (for multi-day events)
-        const result = await processPostWithClaude(anthropic, post, page);
-        apiCallsMade++;
-
-        if (metrics) {
-          metrics.recordApiCall(clubUsername);
+        const { result, cached } = await cachedExtraction(post,
+          () => processPostWithClaude(anthropic, post, page),
+          { models: { ...getConfiguredModels(), force: process.env.FORCE_MODEL, maxImages: process.env.MAX_CAROUSEL_IMAGES } });
+        if (!cached) {
+          apiCallsMade++;
+          if (metrics) metrics.recordApiCall(clubUsername);
         }
 
         // Handle both single result and array (multi-day events)

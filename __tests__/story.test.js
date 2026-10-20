@@ -114,7 +114,7 @@ describe('groupByTime', () => {
   });
 
   it('labels untimed events rather than showing a blank header', () => {
-    expect(groupByTime([ev({ event_time: '' })])[0].time).toBe('All day');
+    expect(groupByTime([ev({ event_time: '' })])[0].time).toBe('Time not specified');
   });
 });
 

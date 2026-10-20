@@ -1,0 +1,9 @@
+{
+  "enabled": false,
+  "deliveryMode": "connector",
+  "deliveryEnabled": false,
+  "budgetUsd": 2,
+  "recipient": "ai.jadonli09@gmail.com",
+  "fromAddress": "ai.jadonli09@gmail.com",
+  "coverageMode": "best-effort"
+}

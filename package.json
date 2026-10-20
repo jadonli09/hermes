@@ -14,7 +14,8 @@
     "story": "node story.js",
     "story:intro": "node story-intro.js",
     "avatars": "node refresh-avatars.js",
-    "logo": "node render-logo.js"
+    "logo": "node render-logo.js",
+    "nightly": "node automation/nightly.js"
   },
   "keywords": [
     "instagram",

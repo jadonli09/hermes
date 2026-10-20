@@ -255,7 +255,9 @@ TIME (event_time):
   * "after school", "afterschool", "after-school" → "After School"
   * "before school", "before-school" → "Before School"
 - Preserve exact times if specified (include AM/PM)
-- If no time clues appear anywhere, leave null and lower confidence
+- Preserve contextual periods such as "Health/ethnic studies period" or "During READ".
+- Use "All day" only when the source explicitly says all day; never infer it from a blank time.
+- If no time clues appear anywhere, leave null and lower confidence. Never default a meeting, fundraiser, workshop or activity to Lunch.
 
 EVENT TYPE (event_type):
 - Valid values: "Club Meeting", "Fundraiser", "Volunteer", "Social Event", "Announcement", "Competition", "Workshop", "Game", "Tryout", "Dance", "Assembly", "Election", "Activity", "Spirit Day", "Event", "Other"
@@ -477,13 +479,6 @@ Quick Reference:
     let eventTime = extractedData.event_time || null;
     const eventType = extractedData.event_type || null;
 
-    // Default event_time to "Lunch" for certain event types when not specified
-    const lunchDefaultTypes = ['Club Meeting', 'Fundraiser', 'Workshop'];
-    if (!eventTime && eventType && lunchDefaultTypes.includes(eventType)) {
-      eventTime = 'Lunch';
-      console.log(`  Defaulting event_time to "Lunch" for ${eventType}`);
-    }
-
     const structuredData = {
       club_name: post.accountName || extractedData.club_name || null,
       event_date: extractedData.event_date || null,
@@ -671,10 +666,6 @@ Return ONLY valid JSON. No markdown, no explanation.`;
       let eventTime = event.event_time || null;
       const eventType = event.event_type || 'Spirit Day';
 
-      // Default to Lunch for Spirit Days without time
-      if (!eventTime && ['Spirit Day', 'Activity'].includes(eventType)) {
-        eventTime = null; // Spirit days are typically all-day
-      }
 
       return {
         club_name: post.accountName || null,

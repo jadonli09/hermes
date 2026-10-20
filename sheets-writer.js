@@ -1,3 +1,5 @@
+import { appendOnce } from './automation/sheets-append.js';
+import { canonicalPostUrl } from './automation/state.js';
 // Google Sheets writer module for populating spreadsheet with event data
 import { google } from 'googleapis';
 import { retryWithBackoff } from './utils/retry.js';
@@ -24,6 +26,7 @@ export async function authenticateSheets(credentialsPath) {
     
     return sheets;
   } catch (error) {
+    if (process.env.HERMES_STRICT_REFRESH === 'true') throw error;
     console.error('Error authenticating with Google Sheets:', error.message);
     throw new Error(`Failed to authenticate with Google Sheets: ${error.message}`);
   }
@@ -45,6 +48,7 @@ export async function getExistingPostUrls(sheets, spreadsheetId) {
     });
 
     if (!spreadsheet.data.sheets || spreadsheet.data.sheets.length === 0) {
+      if (process.env.HERMES_STRICT_REFRESH === 'true') throw new Error('Spreadsheet has no sheets');
       console.warn('Warning: Spreadsheet has no sheets, returning empty URL set');
       return new Set();
     }
@@ -74,6 +78,7 @@ export async function getExistingPostUrls(sheets, spreadsheetId) {
         console.log('No existing data found in spreadsheet (empty or header only)');
       }
     } catch (error) {
+      if (process.env.HERMES_STRICT_REFRESH === 'true') throw error;
       // If there's an error reading existing data (e.g., empty sheet), continue with empty set
       console.warn(`Warning: Error reading existing post URLs from spreadsheet: ${error.message}`);
       console.warn('Continuing with empty URL set (will check all posts)');
@@ -81,6 +86,7 @@ export async function getExistingPostUrls(sheets, spreadsheetId) {
 
     return existingPostUrls;
   } catch (error) {
+    if (process.env.HERMES_STRICT_REFRESH === 'true') throw error;
     console.error(`Error getting existing post URLs: ${error.message}`);
     console.warn('Continuing with empty URL set (will check all posts)');
     // Return empty Set on error to allow processing to continue
@@ -164,12 +170,14 @@ export async function getExistingEvents(sheets, spreadsheetId) {
         console.log('No existing data found in spreadsheet (empty or header only)');
       }
     } catch (error) {
+      if (process.env.HERMES_STRICT_REFRESH === 'true') throw error;
       console.warn(`Warning: Error reading existing events from spreadsheet: ${error.message}`);
       console.warn('Continuing with empty events map');
     }
 
     return eventsMap;
   } catch (error) {
+    if (process.env.HERMES_STRICT_REFRESH === 'true') throw error;
     console.error(`Error getting existing events: ${error.message}`);
     return new Map();
   }
@@ -363,7 +371,11 @@ export async function updateOrAppendToSheet(sheets, spreadsheetId, data, existin
     const eventsToAppend = [];
     let skippedCount = 0;
     
+    const incoming = new Set();
     for (const meeting of data) {
+      const identity = JSON.stringify([canonicalPostUrl(meeting.post_url), normalizeDate(meeting.event_date), String(meeting.club_name || '').trim().toLowerCase()]);
+      if (incoming.has(identity)) { skippedCount++; continue; }
+      incoming.add(identity);
       const postUrl = (meeting.post_url || '').trim();
       
       if (!postUrl) {
@@ -429,6 +441,7 @@ export async function updateOrAppendToSheet(sheets, spreadsheetId, data, existin
         });
         maxRow = currentRowResponse.data.values ? currentRowResponse.data.values.length : 0;
       } catch (error) {
+        if (process.env.HERMES_STRICT_REFRESH === 'true') throw error;
         console.warn('Warning: Could not get row count for validation:', error.message);
       }
       
@@ -477,6 +490,7 @@ export async function updateOrAppendToSheet(sheets, spreadsheetId, data, existin
           successfullyUpdatedRows.push(rowIndex);
           successfullyUpdatedCount++;
         } catch (error) {
+        if (process.env.HERMES_STRICT_REFRESH === 'true') throw error;
           console.error(`Error updating row ${rowIndex} for post ${meeting.post_url}:`, error.message);
           // Continue with other updates even if one fails
         }
@@ -596,9 +610,9 @@ export async function updateOrAppendToSheet(sheets, spreadsheetId, data, existin
         ];
       });
 
-      // Append rows to the spreadsheet with retry logic
+      // Persist intent and never retry a non-idempotent append blindly
       // Range: 'Sheet1!A:J' (or first sheet, columns A through J)
-      const response = await retryWithBackoff(async () => {
+      const response = await appendOnce(async () => {
         return await sheets.spreadsheets.values.append({
           spreadsheetId: spreadsheetId,
           range: `${sheetName}!A:J`,
@@ -607,8 +621,8 @@ export async function updateOrAppendToSheet(sheets, spreadsheetId, data, existin
         resource: {
           values: rows
         }
-      });
-    });
+      }, { retry: false });
+    }, rows);
     
     console.log(`Successfully appended ${rows.length} new row(s) to spreadsheet`);
       
@@ -725,6 +739,7 @@ export async function updateOrAppendToSheet(sheets, spreadsheetId, data, existin
     };
     
   } catch (error) {
+    if (process.env.HERMES_STRICT_REFRESH === 'true') throw error;
     console.error('Error updating/appending to spreadsheet:', error.message);
     throw new Error(`Failed to update/append data to spreadsheet: ${error.message}`);
   }
@@ -802,6 +817,7 @@ export async function sortSheetByDate(sheets, spreadsheetId) {
     console.log(`Successfully sorted spreadsheet by event_date (${lastRow - 1} data rows)`);
     
   } catch (error) {
+    if (process.env.HERMES_STRICT_REFRESH === 'true') throw error;
     console.error('Error sorting spreadsheet:', error.message);
     throw new Error(`Failed to sort spreadsheet: ${error.message}`);
   }

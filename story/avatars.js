@@ -6,7 +6,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { runActor } from '../scrapers/apify-client.js';
+import { runActor, acknowledgeActorRun } from '../scrapers/apify-client.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const AVATAR_DIR = path.join(__dirname, '..', 'assets', 'avatars');
@@ -64,6 +64,8 @@ export async function refreshAvatars(handles, { token, force = false, maxTotalCh
     maxItems: wanted.length,
     maxTotalChargeUsd
   });
+
+  acknowledgeActorRun(PROFILE_ACTOR, { usernames: wanted });
 
   const fetched = [];
   for (const profile of profiles) {

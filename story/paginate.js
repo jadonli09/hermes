@@ -97,7 +97,7 @@ export function scaleFor(count) {
 export function groupByTime(events) {
   const groups = [];
   for (const event of events) {
-    const label = String(event.event_time || '').trim() || 'All day';
+    const label = String(event.event_time || '').trim() || 'Time not specified';
     const last = groups[groups.length - 1];
     if (last && last.time === label) {
       last.events.push(event);
