@@ -8,6 +8,9 @@ import { retryWithBackoff } from '../utils/retry.js';
 
 const API = 'https://api.apify.com/v2';
 const ACTIVE = new Set(['READY', 'RUNNING', 'TIMING-OUT', 'ABORTING']);
+// Apify's dataset counters can lag pushed items by up to 5s, so re-reads of an
+// inconsistent page wait 15s in total before failing. Reads are free; no POST.
+const PAGE_RETRY_DELAYS_MS = [1000, 2000, 3000, 4000, 5000];
 
 export async function runActor({ token, actorId, input, maxItems, maxTotalChargeUsd = 2,
   statePath = process.env.HERMES_APIFY_STATE || path.resolve('.hermes/apify', `${digest({ actorId })}.json`),
@@ -107,7 +110,7 @@ export async function runActor({ token, actorId, input, maxItems, maxTotalCharge
     // Do not append a batch until all available pagination evidence agrees.
     while (true) {
       let batch, total;
-      for (let attempt = 0; attempt < 3; attempt++) {
+      for (let attempt = 0; attempt <= PAGE_RETRY_DELAYS_MS.length; attempt++) {
         const response = await get(`${API}/datasets/${state.datasetId}/items?format=json&offset=${offset}&limit=1000`);
         batch = await response.json();
         if (!Array.isArray(batch)) throw new Error('Invalid Apify dataset');
@@ -125,9 +128,9 @@ export async function runActor({ token, actorId, input, maxItems, maxTotalCharge
           (total !== null && offset < total && !batch.length);
         if (!invalid) break;
         const diagnostic = `offset=${offset}, rows=${batch.length}, total=${total}, count=${count}, returnedOffset=${returnedOffset}, expectedTotal=${expectedTotal}`;
-        if (attempt === 2) throw new Error(`Invalid dataset pagination after 3 reads (${diagnostic}); saved actor retained`);
+        if (attempt === PAGE_RETRY_DELAYS_MS.length) throw new Error(`Invalid dataset pagination after ${attempt + 1} reads (${diagnostic}); saved actor retained`);
         console.warn(`Inconsistent dataset pagination (${diagnostic}); retrying same dataset page`);
-        await sleep(250 * (attempt + 1));
+        await sleep(PAGE_RETRY_DELAYS_MS[attempt]);
       }
       if (total !== null) expectedTotal = total;
       items.push(...batch); offset += batch.length;

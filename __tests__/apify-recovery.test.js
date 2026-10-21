@@ -126,8 +126,28 @@ describe('dataset pagination integrity',()=>{
   ['wrong offset',()=>page([{}],1,{'x-apify-pagination-offset':'1'})],['no progress',()=>page([],1)]
  ])('persistent %s fails closed after bounded GETs with no cached partial data',async(_,make)=>{
   const fetchFn=jest.fn().mockResolvedValueOnce(started()).mockResolvedValueOnce(success()).mockImplementation(async()=>make());
-  await expect(runActor({...opts,fetchFn,sleep:async()=>{}})).rejects.toThrow(/after 3 reads.*offset=0/);
-  expect(fetchFn).toHaveBeenCalledTimes(5);expect(readState(opts.statePath).items).toBeUndefined();expect(readState(opts.ledgerPath).statePath).toBe(opts.statePath);
+  await expect(runActor({...opts,fetchFn,sleep:async()=>{}})).rejects.toThrow(/after 6 reads.*offset=0/);
+  expect(fetchFn).toHaveBeenCalledTimes(8);expect(readState(opts.statePath).items).toBeUndefined();expect(readState(opts.ledgerPath).statePath).toBe(opts.statePath);
+ });
+ // Apify documents dataset counters lagging pushed items by up to 5 seconds.
+ // Seen live: rows=112 while total=count=110, still lagging after 0.75s.
+ test('counters lagging behind rows for several seconds are waited out on the saved dataset',async()=>{
+  const lagging=()=>page([{id:1},{id:2}],1,{'x-apify-pagination-count':'1','x-apify-pagination-offset':'0'});
+  const fetchFn=jest.fn().mockResolvedValueOnce(started()).mockResolvedValueOnce(success())
+   .mockResolvedValueOnce(lagging()).mockResolvedValueOnce(lagging()).mockResolvedValueOnce(lagging()).mockResolvedValueOnce(lagging())
+   .mockResolvedValueOnce(page([{id:1},{id:2}],2,{'x-apify-pagination-count':'2','x-apify-pagination-offset':'0'}));
+  const sleep=jest.fn(async()=>{});
+  expect(await runActor({...opts,fetchFn,sleep})).toEqual([{id:1},{id:2}]);
+  expect(sleep.mock.calls.map(([ms])=>ms)).toEqual([1000,2000,3000,4000]);
+  expect(fetchFn.mock.calls.filter(([,o])=>o.method==='POST')).toHaveLength(1);
+  expect(new Set(fetchFn.mock.calls.slice(2).map(([url])=>url)).size).toBe(1);
+ });
+ test('persistent mismatch waits longer than the documented 5s counter lag before failing',async()=>{
+  const fetchFn=jest.fn().mockResolvedValueOnce(started()).mockResolvedValueOnce(success()).mockImplementation(async()=>page([{id:1},{id:2}],1));
+  const sleep=jest.fn(async()=>{});
+  await expect(runActor({...opts,fetchFn,sleep})).rejects.toThrow(/after 6 reads/);
+  expect(sleep.mock.calls.reduce((sum,[ms])=>sum+ms,0)).toBeGreaterThan(5000);
+  expect(fetchFn.mock.calls.filter(([,o])=>o.method==='POST')).toHaveLength(1);
  });
  test('changing totals between pages cannot truncate a completed dataset',async()=>{
   const fetchFn=jest.fn().mockResolvedValueOnce(started()).mockResolvedValueOnce(success()).mockResolvedValueOnce(page([{id:1}],2)).mockImplementation(async()=>page([],1));
